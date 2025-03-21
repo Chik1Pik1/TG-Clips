@@ -1,3 +1,19 @@
+// Firebase Config
+const firebaseConfig = {
+  apiKey: "AIzaSyCun4sBfsWl6Qqu4C-Qs8XB9fWqoFda8ck",
+  authDomain: "tg-clips.firebaseapp.com",
+  projectId: "tg-clips",
+  storageBucket: "tg-clips.firebasestorage.app",
+  messagingSenderId: "68837002540",
+  appId: "1:68837002540:web:3215ed30dbf14db9ee3089",
+  measurementId: "G-7R1RSQ0S4P"
+};
+
+// Инициализация Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const storage = firebase.storage();
+
 document.addEventListener('DOMContentLoaded', () => {
     let tg = window.Telegram?.WebApp;
     if (tg) {
