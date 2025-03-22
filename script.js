@@ -1,6 +1,6 @@
 // Firebase Config (одно объявление)
 const firebaseConfig = {
-  apiKey: "",
+  apiKey: "AIzaSyD_auP0yFSpUEeEWCFaaJbiWDu0CHQleUI",
   authDomain: "tg-clips.firebaseapp.com",
   projectId: "tg-clips",
   storageBucket: "tg-clips.firebasestorage.app",
