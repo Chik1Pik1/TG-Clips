@@ -1,4 +1,4 @@
-// Firebase Config (объявляем только один раз)
+// Firebase Config (одно объявление)
 const firebaseConfig = {
   apiKey: "AIzaSyCun4sBfsWl6Qqu4C-Qs8XB9fWqoFda8ck",
   authDomain: "tg-clips.firebaseapp.com",
@@ -138,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let preloadedVideos = {};
     const MAX_PRELOAD_SIZE = 3;
     const MAX_PLAYLIST_SIZE = 10;
-    let userId = null; // Глобальная переменная userId
+    let userId = null;
     let uploadedFileUrl = null;
 
     const video = document.getElementById('videoPlayer');
@@ -267,7 +267,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function registerChannel() {
         console.log('registerChannel вызвана, userId:', userId);
         if (!tg?.initDataUnsafe?.user && !userId) {
-            // Проверяем версию Telegram и используем alert вместо showAlert
             alert('Пожалуйста, войдите через Telegram, чтобы зарегистрировать канал.');
             return;
         }
