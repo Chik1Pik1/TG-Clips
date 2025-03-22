@@ -1331,3 +1331,17 @@ html, body {
     pointer-events: auto; /* Убеждаемся, что кнопки кликабельны */
     opacity: 1; /* Предотвращаем случайное скрытие */
 }
+
+body.telegram-fullscreen {
+    height: 100% !important;
+    width: 100% !important;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+.telegram-fullscreen .container,
+.telegram-fullscreen #videoPlayer {
+    height: 100% !important;
+    width: 100% !important;
+}
