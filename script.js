@@ -331,11 +331,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const fullscreenBtn = document.querySelector('.fullscreen-btn');
         if (fullscreenBtn) {
-            fullscreenBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                toggleFullscreen();
-            });
+          fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>'; // Иконка по умолчанию
+          fullscreenBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              toggleFullscreen();
+        });
         }
 
         reactionButtons.forEach(button => {
@@ -457,6 +458,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const dragHandle = document.querySelector('.drag-handle');
         dragHandle.addEventListener('mousedown', startDragging);
         dragHandle.addEventListener('touchstart', startDragging, { passive: false });
+
+        let isFullscreen = false;
 
      function toggleFullscreen() {
         let tg = window.Telegram?.WebApp;
