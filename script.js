@@ -9,10 +9,8 @@ const firebaseConfig = {
   measurementId: "G-7R1RSQ0S4P"
 };
 
-// Инициализация Firebase
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-const storage = firebase.storage();
+// Глобальные переменные для Firebase
+let db, storage;
 
 document.addEventListener('DOMContentLoaded', () => {
     let tg = window.Telegram?.WebApp;
@@ -28,9 +26,37 @@ document.addEventListener('DOMContentLoaded', () => {
     const authBtn = document.getElementById('authBtn');
     const registerChannelBtn = document.getElementById('registerChannelBtn');
 
-    if (!authBtn || !registerChannelBtn) {
-        console.error('Кнопки не найдены в DOM');
+    if (!authScreen || !playerContainer || !authBtn || !registerChannelBtn) {
+        console.error('Необходимые элементы не найдены в DOM');
         return;
+    }
+
+    // Привязываем обработчики сразу
+    authBtn.addEventListener('click', () => {
+        console.log('Клик по authBtn');
+        if (tg?.initDataUnsafe?.user) {
+            userId = tg.initDataUnsafe.user.id;
+            showPlayer();
+        } else {
+            userId = 'browserTestUser';
+            alert('Имитация: Вы вошли как ' + userId);
+            showPlayer();
+        }
+    });
+
+    registerChannelBtn.addEventListener('click', () => {
+        console.log('Клик по registerChannelBtn, userId:', userId);
+        registerChannel();
+    });
+
+    // Инициализация Firebase
+    try {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore();
+        storage = firebase.storage();
+        console.log('Firebase успешно инициализирован');
+    } catch (error) {
+        console.error('Ошибка инициализации Firebase:', error);
     }
 
     const videoPlaylist = [
@@ -135,23 +161,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         console.log('No Telegram user detected on load');
     }
-
-    authBtn.addEventListener('click', () => {
-        console.log('Клик по authBtn');
-        if (tg?.initDataUnsafe?.user) {
-            userId = tg.initDataUnsafe.user.id; // Обновляем глобальный userId
-            showPlayer();
-        } else {
-            userId = 'browserTestUser'; // Обновляем глобальный userId
-            alert('Имитация: Вы вошли как ' + userId);
-            showPlayer();
-        }
-    });
-
-    registerChannelBtn.addEventListener('click', () => {
-        console.log('Клик по registerChannelBtn, userId:', userId);
-        registerChannel();
-    });
 
     function showPlayer() {
         authScreen.style.display = 'none';
