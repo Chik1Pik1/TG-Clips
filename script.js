@@ -1,6 +1,6 @@
 // Firebase Config (одно объявление)
 const firebaseConfig = {
-  apiKey: "AIzaSyD_auP0yFSpUEeEWCFaaJbiWDu0CHQleUI",
+  apiKey: "AIzaSyCun4sBfsWl6Qqu4C-Qs8XB9fWqoFda8ck",
   authDomain: "tg-clips.firebaseapp.com",
   projectId: "tg-clips",
   storageBucket: "tg-clips.firebasestorage.app",
@@ -311,6 +311,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let isProgressBarActivated = false;
         let lastTime = 0;
         let hasViewed = false;
+        let isSwiping = false; // Добавляем флаг для свайпа
 
         loadVideo();
         initializeTheme();
@@ -331,12 +332,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const fullscreenBtn = document.querySelector('.fullscreen-btn');
         if (fullscreenBtn) {
-          fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>'; // Иконка по умолчанию
+          fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
           fullscreenBtn.addEventListener('click', (e) => {
               e.stopPropagation();
               e.preventDefault();
               toggleFullscreen();
-        });
+          });
         }
 
         reactionButtons.forEach(button => {
@@ -392,8 +393,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         video.addEventListener('pause', handlePause);
         function handlePause() {
-            if (!isProgressBarActivated) isProgressBarActivated = true;
-            progressBar.classList.add('visible');
+            if (!isProgressBarActivated && !isSwiping) { // Не показываем при свайпе
+                isProgressBarActivated = true;
+                progressBar.classList.add('visible');
+            }
             videoDataStore[currentVideoIndex].lastPosition = video.currentTime;
             updateVideoCache(currentVideoIndex);
         }
@@ -461,27 +464,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let isFullscreen = false;
 
-     function toggleFullscreen() {
-        let tg = window.Telegram?.WebApp;
-        if (tg) {
-        if (tg.requestFullscreen) {
-            tg.requestFullscreen();
-            console.log('Полноэкранный режим запрошен');
-            document.body.classList.add('telegram-fullscreen');
-        } else {
-            console.warn('requestFullscreen не поддерживается');
-            tg.expand(); // Запасной вариант для старых версий
-            showNotification('Полноэкранный режим не доступен в этой версии Telegram');
+        function toggleFullscreen() {
+            let tg = window.Telegram?.WebApp;
+            if (tg) {
+                if (tg.requestFullscreen) {
+                    tg.requestFullscreen();
+                    console.log('Полноэкранный режим запрошен');
+                    document.body.classList.add('telegram-fullscreen');
+                } else {
+                    console.warn('requestFullscreen не поддерживается');
+                    tg.expand();
+                    showNotification('Полноэкранный режим не доступен в этой версии Telegram');
+                }
+            } else {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(err => console.error('Ошибка:', err));
+                } else {
+                    document.exitFullscreen().catch(err => console.error('Ошибка:', err));
+                }
+            }
         }
-        } else {
-        // Режим браузера
-        if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen().catch(err => console.error('Ошибка:', err));
-        } else {
-            document.exitFullscreen().catch(err => console.error('Ошибка:', err));
-        }
-        }
-     }
 
         function downloadCurrentVideo() {
             const videoUrl = video.src;
@@ -684,6 +686,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 startX = e.touches[0].clientX;
                 startY = e.touches[0].clientY;
                 touchTimeout = setTimeout(() => toggleVideoPlayback(), 200);
+                isSwiping = false;
             }
 
             function handleTouchMove(e) {
@@ -694,6 +697,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
                     clearTimeout(touchTimeout);
+                    isSwiping = true;
                 }
             }
 
@@ -704,12 +708,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const swipeThresholdVertical = 20;
 
                 if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+                    isSwiping = false;
                     return;
                 }
 
                 clearTimeout(touchTimeout);
 
-                if (!userId) return;
+                if (!userId) {
+                    isSwiping = false;
+                    return;
+                }
 
                 if (Math.abs(deltaX) > swipeThresholdHorizontal && Math.abs(deltaX) > Math.abs(deltaY)) {
                     if (deltaX > 0) playNextVideo();
@@ -723,6 +731,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         showFloatingReaction('dislike', endX, startY);
                     }
                 }
+                isSwiping = false;
             }
 
             let isDragging = false;
@@ -732,6 +741,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 startX = e.clientX;
                 startY = e.clientY;
                 touchTimeout = setTimeout(() => toggleVideoPlayback(), 200);
+                isSwiping = false;
             }
 
             function handleMouseMove(e) {
@@ -742,6 +752,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const deltaY = endY - startY;
                 if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
                     clearTimeout(touchTimeout);
+                    isSwiping = true;
                 }
             }
 
@@ -754,12 +765,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const swipeThresholdVertical = 20;
 
                 if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+                    isSwiping = false;
                     return;
                 }
 
                 clearTimeout(touchTimeout);
 
-                if (!userId) return;
+                if (!userId) {
+                    isSwiping = false;
+                    return;
+                }
 
                 if (Math.abs(deltaX) > swipeThresholdHorizontal && Math.abs(deltaX) > Math.abs(deltaY)) {
                     if (deltaX > 0) playNextVideo();
@@ -773,6 +788,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         showFloatingReaction('dislike', endX, startY);
                     }
                 }
+                isSwiping = false;
             }
 
             function showFloatingReaction(type, x, y) {
@@ -856,9 +872,10 @@ document.addEventListener('DOMContentLoaded', () => {
         function addComment() {
             const videoData = videoDataStore[currentVideoIndex];
             const text = commentInput.value.trim();
-            if (text) {
+            if (text && userId) {
                 videoData.comments.push({
-                    text,
+                    userId: userId,
+                    text: text,
                     replyTo: commentInput.dataset.replyTo || null
                 });
                 commentInput.value = '';
@@ -866,6 +883,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 commentInput.placeholder = 'Введите комментарий';
                 updateComments();
                 updateCounters();
+                updateVideoCache(currentVideoIndex);
             }
         }
 
@@ -873,15 +891,41 @@ document.addEventListener('DOMContentLoaded', () => {
             const videoData = videoDataStore[currentVideoIndex];
             commentsList.innerHTML = '';
             videoData.comments.forEach((comment, idx) => {
+                const userPhoto = (tg?.initDataUnsafe?.user?.id === comment.userId && tg?.initDataUnsafe?.user?.photo_url) 
+                    ? tg.initDataUnsafe.user.photo_url 
+                    : 'https://via.placeholder.com/30';
+                const username = (tg?.initDataUnsafe?.user?.id === comment.userId && tg?.initDataUnsafe?.user?.username) 
+                    ? `@${tg.initDataUnsafe.user.username}` 
+                    : `User_${comment.userId.slice(0, 5)}`;
+                const isOwnComment = comment.userId === userId;
                 const commentEl = document.createElement('div');
                 commentEl.className = 'comment';
                 commentEl.innerHTML = `
-                    <img src="https://via.placeholder.com/30" alt="User">
-                    <div class="comment-text">${comment.text}${comment.replyTo ? `<blockquote>Цитата: ${videoData.comments[comment.replyTo].text}</blockquote>` : ''}</div>
+                    <img src="${userPhoto}" alt="User Avatar" class="comment-avatar" data-user-id="${comment.userId}">
+                    <div class="comment-content">
+                        <span class="comment-username">${username}</span>
+                        <div class="comment-text">${comment.text}${comment.replyTo ? `<blockquote>Цитата: ${videoData.comments[comment.replyTo].text}</blockquote>` : ''}</div>
+                    </div>
                     <button class="reply-btn" data-index="${idx}">Ответить</button>
+                    ${isOwnComment ? `<button class="delete-comment-btn" data-index="${idx}">Удалить</button>` : ''}
                 `;
                 commentsList.appendChild(commentEl);
                 commentEl.querySelector('.reply-btn').addEventListener('click', () => replyToComment(idx));
+                if (isOwnComment) {
+                    commentEl.querySelector('.delete-comment-btn').addEventListener('click', () => deleteComment(idx));
+                }
+                commentEl.querySelector('.comment-avatar').addEventListener('click', () => {
+                    const channel = channels[comment.userId];
+                    if (channel && channel.link) {
+                        if (tg?.isVersionGte('6.0')) {
+                            tg.openTelegramLink(channel.link);
+                        } else {
+                            window.open(channel.link, '_blank');
+                        }
+                    } else {
+                        showNotification('Канал не зарегистрирован');
+                    }
+                });
             });
             commentsList.scrollTop = commentsList.scrollHeight;
         }
@@ -890,6 +934,16 @@ document.addEventListener('DOMContentLoaded', () => {
             commentInput.dataset.replyTo = index;
             commentInput.placeholder = `Ответ на: "${videoDataStore[currentVideoIndex].comments[index].text.slice(0, 20)}..."`;
             commentInput.focus();
+        }
+
+        function deleteComment(index) {
+            if (confirm('Удалить этот комментарий?')) {
+                videoDataStore[currentVideoIndex].comments.splice(index, 1);
+                updateComments();
+                updateCounters();
+                updateVideoCache(currentVideoIndex);
+                showNotification('Комментарий удалён');
+            }
         }
 
         function updateDescription() {
