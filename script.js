@@ -118,13 +118,18 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         if (cachedData) {
             const parsedData = JSON.parse(cachedData);
+            const fixedComments = (parsedData.comments || []).map(comment => ({
+                userId: comment.userId || 'unknown',
+                text: comment.text || '',
+                replyTo: comment.replyTo || null
+            }));
             return {
                 ...defaultData,
                 ...parsedData,
                 views: new Set(parsedData.views || []),
                 userLikes: new Set(parsedData.userLikes || []),
                 userDislikes: new Set(parsedData.userDislikes || []),
-                comments: parsedData.comments || [],
+                comments: fixedComments,
                 chatMessages: parsedData.chatMessages || [],
                 description: parsedData.description || ''
             };
@@ -482,6 +487,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.documentElement.requestFullscreen().catch(err => console.error('Ошибка:', err));
                 } else {
                     document.exitFullscreen().catch(err => console.error('Ошибка:', err));
+                    document.body.classList.remove('telegram-fullscreen');
                 }
             }
         }
@@ -910,7 +916,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <img src="${userPhoto}" alt="User Avatar" class="comment-avatar" data-user-id="${comment.userId}">
                     <div class="comment-content">
                         <span class="comment-username">${username}</span>
-                        <div class="comment-text">${comment.text}${comment.replyTo ? `<blockquote>Цитата: ${videoData.comments[comment.replyTo].text}</blockquote>` : ''}</div>
+                        <div class="comment-text">${comment.text}${comment.replyTo !== null && videoData.comments[comment.replyTo] ? `<blockquote>Цитата: ${videoData.comments[comment.replyTo].text}</blockquote>` : ''}</div>
                     </div>
                     <button class="reply-btn" data-index="${idx}">Ответить</button>
                     ${isOwnComment ? `<button class="delete-comment-btn" data-index="${idx}">Удалить</button>` : ''}
