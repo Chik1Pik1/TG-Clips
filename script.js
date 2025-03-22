@@ -9,1029 +9,167 @@ const firebaseConfig = {
     measurementId: "G-7R1RSQ0S4P"
 };
 
-// Глобальные переменные для Firebase
-let db, storage;
+// Инициализация Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const storage = firebase.storage();
 
-document.addEventListener('DOMContentLoaded', () => {
-    let tg = window.Telegram?.WebApp;
-    if (tg) {
-        tg.ready();
-        console.log('Telegram Web App инициализирован, userId:', tg.initDataUnsafe?.user?.id);
-    } else {
-        console.warn('Telegram Web App SDK не загружен. Работа в режиме браузера.');
-    }
+// Класс для управления видео
+class VideoManager {
+    constructor() {
+        this.videoPlaylist = [];
+        this.videoDataStore = [];
+        this.currentVideoIndex = 0;
+        this.preloadedVideos = {};
+        this.MAX_PRELOAD_SIZE = 3;
+        this.MAX_PLAYLIST_SIZE = 10;
+        this.userId = null;
+        this.uploadedFileUrl = null;
+        this.tg = window.Telegram?.WebApp;
 
-    const authScreen = document.getElementById('authScreen');
-    const playerContainer = document.getElementById('playerContainer');
-    const authBtn = document.getElementById('authBtn');
-    let registerChannelBtn = document.getElementById('registerChannelBtn');
-    let userAvatar = document.getElementById('userAvatar');
-
-    if (!authScreen || !playerContainer || !authBtn) {
-        console.error('Критические элементы не найдены в DOM');
-        return;
-    }
-
-    if (!registerChannelBtn) {
-        setTimeout(() => {
-            registerChannelBtn = document.getElementById('registerChannelBtn');
-            if (registerChannelBtn) bindRegisterChannelBtn(registerChannelBtn);
-        }, 1000);
-    } else {
-        bindRegisterChannelBtn(registerChannelBtn);
-    }
-
-    if (!userAvatar) {
-        setTimeout(() => {
-            userAvatar = document.getElementById('userAvatar');
-            if (userAvatar) bindUserAvatar(userAvatar);
-        }, 1000);
-    } else {
-        bindUserAvatar(userAvatar);
-    }
-
-    authBtn.addEventListener('click', () => {
-        if (tg?.initDataUnsafe?.user) {
-            userId = tg.initDataUnsafe.user.id;
-            showPlayer();
+        // Инициализация Telegram Web App
+        if (this.tg) {
+            this.tg.ready();
+            console.log('Telegram Web App инициализирован, userId:', this.tg.initDataUnsafe?.user?.id);
         } else {
-            userId = 'browserTestUser';
-            alert('Имитация: Вы вошли как ' + userId);
-            showPlayer();
+            console.warn('Telegram Web App SDK не загружен. Работа в режиме браузера.');
         }
-    });
 
-    try {
-        firebase.initializeApp(firebaseConfig);
-        db = firebase.firestore();
-        storage = firebase.storage();
-        console.log('Firebase успешно инициализирован');
-    } catch (error) {
-        console.error('Ошибка инициализации Firebase:', error);
+        this.channels = JSON.parse(localStorage.getItem('channels')) || {};
     }
 
-    const videoPlaylist = [
-        "https://www.w3schools.com/html/mov_bbb.mp4",
-        "https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4",
-        "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"
-    ];
-
-    const videoDataStore = videoPlaylist.map((url) => {
-        const cachedData = localStorage.getItem(`videoData_${url}`);
-        const defaultData = {
-            views: new Set(),
-            likes: 0,
-            dislikes: 0,
-            userLikes: new Set(),
-            userDislikes: new Set(),
-            comments: [],
-            shares: 0,
-            viewTime: 0,
-            replays: 0,
-            duration: 0,
-            authorId: 'testAuthor123',
-            lastPosition: 0,
-            chatMessages: [],
-            description: ''
-        };
-        if (cachedData) {
-            const parsedData = JSON.parse(cachedData);
-            return {
-                ...defaultData,
-                ...parsedData,
-                views: new Set(parsedData.views || []),
-                userLikes: new Set(parsedData.userLikes || []),
-                userDislikes: new Set(parsedData.userDislikes || []),
-                comments: [],
-                chatMessages: parsedData.chatMessages || [],
-                description: parsedData.description || ''
-            };
-        }
-        return defaultData;
-    });
-
-    const channels = JSON.parse(localStorage.getItem('channels')) || {};
-
-    let currentVideoIndex = 0;
-    let preloadedVideos = {};
-    const MAX_PRELOAD_SIZE = 3;
-    const MAX_PLAYLIST_SIZE = 10;
-    let userId = null;
-    let uploadedFileUrl = null;
-
-    const video = document.getElementById('videoPlayer');
-    const videoSource = document.getElementById('videoSource');
-    const viewCountEl = document.getElementById('viewCount');
-    const likeCountEl = document.getElementById('likeCount');
-    const dislikeCountEl = document.getElementById('dislikeCount');
-    const commentCountEl = document.getElementById('commentCount');
-    const shareCountEl = document.getElementById('shareCount');
-    const ratingEl = document.getElementById('rating');
-    const reactionBar = document.getElementById('reactionBar');
-    const reactionButtons = document.querySelectorAll('.reaction-btn');
-    const swipeArea = document.getElementById('swipeArea');
-    const reactionAnimation = document.getElementById('reactionAnimation');
-    const progressBar = document.getElementById('progressBar');
-    const progressRange = document.getElementById('progressRange');
-    const commentsWindow = document.getElementById('commentsWindow');
-    const commentsList = document.getElementById('commentsList');
-    const commentInput = document.getElementById('commentInput');
-    const sendCommentBtn = document.getElementById('sendComment');
-    const themeToggle = document.querySelector('.theme-toggle');
-    const toggleReactionBar = document.querySelector('.toggle-reaction-bar');
-    const plusBtn = document.querySelector('.plus-btn');
-    const uploadBtn = document.querySelector('.upload-btn');
-    const submenuUpload = document.getElementById('uploadVideo');
-    const submenuChat = document.getElementById('chatAuthor');
-    const uploadModal = document.getElementById('uploadModal');
-    const uploadProgress = document.getElementById('progressBarInner');
-    const uploadPreview = document.getElementById('uploadPreview');
-    const publishBtn = document.getElementById('publishBtn');
-    const cancelBtn = document.getElementById('cancelBtn');
-    const chatModal = document.getElementById('chatModal');
-    const chatMessages = document.getElementById('chatMessages');
-    const chatInput = document.getElementById('chatInput');
-    const sendChatMessage = document.getElementById('sendChatMessage');
-    const closeChat = document.getElementById('closeChat');
-    const shareModal = document.getElementById('shareModal');
-    const shareTelegram = document.getElementById('shareTelegram');
-    const copyLink = document.getElementById('copyLink');
-    const closeShare = document.getElementById('closeShare');
-    const tooltips = document.querySelectorAll('.tooltip');
-
-    const videoUpload = document.createElement('input');
-    videoUpload.type = 'file';
-    videoUpload.accept = 'video/mp4,video/quicktime,video/webm';
-    videoUpload.style.display = 'none';
-    document.body.appendChild(videoUpload);
-
-    if (tg?.initDataUnsafe?.user) {
-        userId = tg.initDataUnsafe.user.id;
-        showPlayer();
-    }
-
-    function bindRegisterChannelBtn(btn) {
-        btn.addEventListener('click', () => registerChannel());
-    }
-
-    function bindUserAvatar(avatar) {
-        avatar.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (!isHolding) {
-                const channel = channels[userId];
-                if (channel && channel.link) {
-                    if (tg?.isVersionGte('6.0')) {
-                        tg.openTelegramLink(channel.link);
-                    } else {
-                        window.open(channel.link, '_blank');
-                    }
-                } else {
-                    registerChannel();
-                }
-            }
-        });
-
-        let holdTimeout = null;
-        const holdDuration = 2000;
-        let isHolding = false;
-
-        function startHold(e) {
-            e.preventDefault();
-            if (holdTimeout || isHolding) return;
-            isHolding = true;
-            avatar.classList.add('holding');
-            holdTimeout = setTimeout(() => {
-                showVideoManagementList();
-                holdTimeout = null;
-                isHolding = false;
-                avatar.classList.remove('holding');
-            }, holdDuration);
-        }
-
-        function stopHold(e) {
-            if (holdTimeout) {
-                clearTimeout(holdTimeout);
-                holdTimeout = null;
-            }
-            isHolding = false;
-            avatar.classList.remove('holding');
-        }
-
-        avatar.addEventListener('mousedown', startHold);
-        avatar.addEventListener('mouseup', stopHold);
-        avatar.addEventListener('mouseleave', stopHold);
-        avatar.addEventListener('touchstart', startHold, { passive: false });
-        avatar.addEventListener('touchend', stopHold);
-        avatar.addEventListener('touchcancel', stopHold);
-        avatar.addEventListener('touchmove', stopHold, { passive: false });
-    }
-
-    function showPlayer() {
-        authScreen.style.display = 'none';
-        playerContainer.style.display = 'flex';
-        initializePlayer();
-    }
-
-    function registerChannel() {
-        if (!tg?.initDataUnsafe?.user && !userId) {
-            alert('Пожалуйста, войдите через Telegram.');
-            return;
-        }
-
-        if (channels[userId]?.link) {
-            showNotification('Канал уже зарегистрирован!');
-            if (tg?.isVersionGte('6.0')) {
-                tg.openTelegramLink(channels[userId].link);
-            } else {
-                window.open(channels[userId].link, '_blank');
-            }
-            return;
-        }
-
-        let channelLink = prompt('Введите ссылку на ваш Telegram-канал (например, https://t.me/yourchannel):');
-        if (channelLink && channelLink.match(/^https:\/\/t\.me\/[a-zA-Z0-9_]+$/)) {
-            channels[userId] = { videos: [], link: channelLink };
-            localStorage.setItem('channels', JSON.stringify(channels));
-            showNotification('Канал успешно зарегистрирован!');
-            if (authScreen.style.display !== 'none') showPlayer();
-        } else {
-            alert('Введите корректную ссылку на Telegram-канал.');
+    // Инициализация плеера
+    async init() {
+        this.bindElements();
+        this.bindEvents();
+        await this.loadInitialVideos();
+        if (this.tg?.initDataUnsafe?.user) {
+            this.userId = this.tg.initDataUnsafe.user.id;
+            this.showPlayer();
         }
     }
 
-    function initializePlayer() {
-        let isSubmenuOpen = false;
-        let isProgressBarActivated = false;
-        let lastTime = 0;
-        let hasViewed = false;
-        let isSwiping = false;
-
-        loadVideo();
-        initializeTheme();
-        initializeTooltips();
-
-        if (userAvatar && tg?.initDataUnsafe?.user?.photo_url) {
-            userAvatar.src = tg.initDataUnsafe.user.photo_url;
-        } else if (userAvatar) {
-            userAvatar.src = 'https://via.placeholder.com/40';
-        }
-
-        document.addEventListener('click', (e) => {
-            const list = document.getElementById('videoManagementList');
-            if (list && list.classList.contains('visible') && !list.contains(e.target) && e.target !== userAvatar) {
-                list.classList.remove('visible');
-            }
-        });
-
-        const fullscreenBtn = document.querySelector('.fullscreen-btn');
-        if (fullscreenBtn) {
-            fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
-            fullscreenBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                toggleFullscreen();
-            });
-        }
-
-        reactionButtons.forEach(button => {
-            button.addEventListener('click', (e) => {
-                e.stopPropagation();
-                handleReaction(button.dataset.type);
-            });
-        });
-
-        plusBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            toggleSubmenu();
-        });
-
-        uploadBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            downloadCurrentVideo();
-        });
-
-        toggleReactionBar.addEventListener('click', (e) => {
-            e.stopPropagation();
-            toggleReactionBarVisibility();
-        });
-
-        video.addEventListener('loadedmetadata', handleLoadedMetadata, { once: true });
-        function handleLoadedMetadata() {
-            video.muted = true;
-            video.play().then(() => {
-                video.pause();
-                video.muted = false;
-            }).catch(err => console.error('Unlock error:', err));
-            const videoData = videoDataStore[currentVideoIndex];
-            videoData.duration = video.duration;
-            progressRange.max = video.duration;
-            progressRange.value = videoData.lastPosition || 0;
-            updateVideoCache(currentVideoIndex);
-            updateRating();
-        }
-
-        video.addEventListener('play', handlePlay);
-        function handlePlay() {
-            const videoData = videoDataStore[currentVideoIndex];
-            if (!hasViewed && userId) {
-                videoData.views.add(userId);
-                hasViewed = true;
-                updateCounters();
-            }
-            if (isProgressBarActivated) progressBar.classList.remove('visible');
-            isProgressBarActivated = false;
-            commentsWindow.classList.remove('visible');
-            preloadNextVideo();
-        }
-
-        video.addEventListener('pause', handlePause);
-        function handlePause() {
-            if (!isProgressBarActivated) {
-                isProgressBarActivated = true;
-                progressBar.classList.add('visible');
-            }
-            videoDataStore[currentVideoIndex].lastPosition = video.currentTime;
-            updateVideoCache(currentVideoIndex);
-        }
-
-        video.addEventListener('ended', handleEnded);
-        function handleEnded() {
-            const videoData = videoDataStore[currentVideoIndex];
-            if (video.currentTime >= video.duration * 0.9) videoData.replays++;
-            videoData.lastPosition = 0;
-            updateVideoCache(currentVideoIndex);
-            playNextVideo();
-        }
-
-        video.addEventListener('timeupdate', handleTimeUpdate);
-        function handleTimeUpdate() {
-            const videoData = videoDataStore[currentVideoIndex];
-            videoData.viewTime += video.currentTime - lastTime;
-            videoData.lastPosition = video.currentTime;
-            lastTime = video.currentTime;
-            progressRange.value = video.currentTime;
-            updateVideoCache(currentVideoIndex);
-            updateRating();
-        }
-
-        progressRange.addEventListener('input', handleProgressInput);
-        function handleProgressInput(e) {
-            video.currentTime = e.target.value;
-            videoDataStore[currentVideoIndex].lastPosition = video.currentTime;
-            updateVideoCache(currentVideoIndex);
-        }
-
-        setupSwipeAndMouseEvents();
-
-        sendCommentBtn.addEventListener('click', addComment);
-        commentInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') addComment();
-        });
-
-        submenuUpload.addEventListener('click', (e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            videoUpload.click();
-            toggleSubmenu();
-        });
-        videoUpload.addEventListener('change', handleVideoUpload);
-        publishBtn.addEventListener('click', publishVideo);
-        cancelBtn.addEventListener('click', cancelUpload);
-
-        submenuChat.addEventListener('click', handleSubmenuChat);
-        sendChatMessage.addEventListener('click', sendChat);
-        chatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendChat();
-        });
-        closeChat.addEventListener('click', () => chatModal.classList.remove('visible'));
-
-        shareTelegram.addEventListener('click', shareViaTelegram);
-        copyLink.addEventListener('click', copyVideoLink);
-        closeShare.addEventListener('click', () => shareModal.classList.remove('visible'));
-
-        themeToggle.addEventListener('click', toggleTheme);
-
-        const dragHandle = document.querySelector('.drag-handle');
-        dragHandle.addEventListener('mousedown', startDragging);
-        dragHandle.addEventListener('touchstart', startDragging, { passive: false });
-
-        function toggleFullscreen() {
-            let tg = window.Telegram?.WebApp;
-            if (tg) {
-                if (tg.requestFullscreen) {
-                    tg.requestFullscreen();
-                    document.body.classList.add('telegram-fullscreen');
-                } else {
-                    tg.expand();
-                    showNotification('Полноэкранный режим не доступен в этой версии Telegram');
-                }
-            } else {
-                if (!document.fullscreenElement) {
-                    document.documentElement.requestFullscreen().catch(err => console.error('Ошибка:', err));
-                } else {
-                    document.exitFullscreen().catch(err => console.error('Ошибка:', err));
-                    document.body.classList.remove('telegram-fullscreen');
-                }
-            }
-        }
-
-        function downloadCurrentVideo() {
-            const videoUrl = videoPlaylist[currentVideoIndex];
-            if (!videoUrl) {
-                alert('Нет видео для загрузки!');
-                return;
-            }
-
-            uploadBtn.classList.add('downloading');
-            uploadBtn.style.setProperty('--progress', '0%');
-
-            fetch(videoUrl)
-                .then(response => {
-                    const total = Number(response.headers.get('content-length'));
-                    let loaded = 0;
-
-                    const reader = response.body.getReader();
-                    const stream = new ReadableStream({
-                        start(controller) {
-                            function push() {
-                                reader.read().then(({ done, value }) => {
-                                    if (done) {
-                                        controller.close();
-                                        return;
-                                    }
-                                    loaded += value.length;
-                                    const progress = total ? (loaded / total) * 100 : simulateProgress();
-                                    uploadBtn.style.setProperty('--progress', `${progress}%`);
-                                    controller.enqueue(value);
-                                    push();
-                                });
-                            }
-                            push();
-                        }
-                    });
-
-                    return new Response(stream).blob();
-                })
-                .then(blob => {
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `video_${Date.now()}.mp4`;
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    document.body.removeChild(a);
-
-                    setTimeout(() => {
-                        uploadBtn.classList.remove('downloading');
-                        uploadBtn.style.setProperty('--progress', '0%');
-                    }, 500);
-                })
-                .catch(err => {
-                    console.error('Ошибка загрузки:', err);
-                    alert('Не удалось скачать видео!');
-                    uploadBtn.classList.remove('downloading');
-                    uploadBtn.style.setProperty('--progress', '0%');
-                });
-        }
-
-        function simulateProgress() {
-            let progress = 0;
-            const interval = setInterval(() => {
-                progress += 10;
-                if (progress >= 100) clearInterval(interval);
-                uploadBtn.style.setProperty('--progress', `${progress}%`);
-            }, 200);
-            return progress;
-        }
-
-        function startDragging(e) {
-            e.preventDefault();
-            let startY = e.type === 'mousedown' ? e.clientY : e.touches[0].clientY;
-            let isDragging = true;
-
-            function onMove(e) {
-                if (!isDragging) return;
-                const currentY = e.type === 'mousemove' ? e.clientY : e.touches[0].clientY;
-                const deltaY = currentY - startY;
-                if (deltaY > 50) {
-                    commentsWindow.classList.remove('visible');
-                    isDragging = false;
-                    document.removeEventListener('mousemove', onMove);
-                    document.removeEventListener('touchmove', onMove);
-                }
-            }
-
-            function onEnd() {
-                isDragging = false;
-                document.removeEventListener('mousemove', onMove);
-                document.removeEventListener('touchmove', onMove);
-                document.removeEventListener('mouseup', onEnd);
-                document.removeEventListener('touchend', onEnd);
-            }
-
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('touchmove', onMove, { passive: false });
-            document.addEventListener('mouseup', onEnd);
-            document.addEventListener('touchend', onEnd);
-        }
-
-        function toggleSubmenu() {
-            isSubmenuOpen = !isSubmenuOpen;
-            submenuUpload.classList.toggle('active', isSubmenuOpen);
-            submenuChat.classList.toggle('active', isSubmenuOpen);
-        }
-
-        function toggleReactionBarVisibility() {
-            if (reactionBar.classList.contains('visible')) {
-                reactionBar.classList.remove('visible');
-                toggleReactionBar.classList.remove('active');
-                toggleReactionBar.innerHTML = '<i class="fas fa-arrow-right"></i>';
-            } else {
-                reactionBar.classList.add('visible');
-                toggleReactionBar.classList.add('active');
-                toggleReactionBar.innerHTML = '<i class="fas fa-arrow-left"></i>';
-                setTimeout(() => {
-                    if (reactionBar.classList.contains('visible')) {
-                        reactionBar.classList.remove('visible');
-                        toggleReactionBar.classList.remove('active');
-                        toggleReactionBar.innerHTML = '<i class="fas fa-arrow-right"></i>';
-                    }
-                }, 15000);
-            }
-        }
-
-        function toggleVideoPlayback() {
-            if (video.paused) {
-                video.play().catch(err => console.error('Play error:', err));
-            } else {
-                video.pause();
-            }
-        }
-
-        function handleReaction(type) {
-            if (!userId) return;
-            const videoData = videoDataStore[currentVideoIndex];
-            if (type === 'like') {
-                if (videoData.userLikes.has(userId)) {
-                    videoData.userLikes.delete(userId);
-                    videoData.likes--;
-                } else {
-                    if (videoData.userDislikes.has(userId)) {
-                        videoData.userDislikes.delete(userId);
-                        videoData.dislikes--;
-                    }
-                    videoData.userLikes.add(userId);
-                    videoData.likes++;
-                    showReaction('like');
-                }
-            } else if (type === 'dislike') {
-                if (videoData.userDislikes.has(userId)) {
-                    videoData.userDislikes.delete(userId);
-                    videoData.dislikes--;
-                } else {
-                    if (videoData.userLikes.has(userId)) {
-                        videoData.userLikes.delete(userId);
-                        videoData.likes--;
-                    }
-                    videoData.userDislikes.add(userId);
-                    videoData.dislikes++;
-                    showReaction('dislike');
-                }
-            } else if (type === 'comment') {
-                commentsWindow.classList.toggle('visible');
-                if (commentsWindow.classList.contains('visible')) commentInput.focus();
-            } else if (type === 'share') {
-                shareModal.classList.add('visible');
-            }
-            updateCounters();
-            updateVideoCache(currentVideoIndex);
-        }
-
-        function showReaction(type) {
-            reactionAnimation.innerHTML = type === 'like' ? '<i class="fas fa-thumbs-up"></i>' : '<i class="fas fa-thumbs-down"></i>';
-            reactionAnimation.classList.add('show');
-            setTimeout(() => reactionAnimation.classList.remove('show'), 2000);
-        }
-
-        function setupSwipeAndMouseEvents() {
-            let startX = 0, startY = 0, endX = 0, endY = 0;
-            let touchTimeout;
-
-            swipeArea.addEventListener('touchstart', handleTouchStart, { passive: false });
-            swipeArea.addEventListener('touchmove', throttle(handleTouchMove, 16), { passive: false });
-            swipeArea.addEventListener('touchend', handleTouchEnd);
-
-            swipeArea.addEventListener('mousedown', handleMouseStart);
-            swipeArea.addEventListener('mousemove', throttle(handleMouseMove, 16));
-            swipeArea.addEventListener('mouseup', handleMouseEnd);
-
-            function handleTouchStart(e) {
-                e.preventDefault();
-                startX = e.touches[0].clientX;
-                startY = e.touches[0].clientY;
-                touchTimeout = setTimeout(() => toggleVideoPlayback(), 200);
-                isSwiping = false;
-            }
-
-            function handleTouchMove(e) {
-                endX = e.touches[0].clientX;
-                endY = e.touches[0].clientY;
-                const deltaX = endX - startX;
-                const deltaY = endY - startY;
-
-                if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
-                    clearTimeout(touchTimeout);
-                    isSwiping = true;
-                }
-            }
-
-            function handleTouchEnd() {
-                const deltaX = endX - startX;
-                const deltaY = endY - startY;
-                const swipeThresholdHorizontal = 50;
-                const swipeThresholdVertical = 20;
-
-                if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
-                    isSwiping = false;
-                    return;
-                }
-
-                clearTimeout(touchTimeout);
-
-                if (!userId) {
-                    isSwiping = false;
-                    return;
-                }
-
-                if (Math.abs(deltaX) > swipeThresholdHorizontal && Math.abs(deltaX) > Math.abs(deltaY)) {
-                    if (deltaX > 0) playNextVideo();
-                    else playPreviousVideo();
-                    if (isProgressBarActivated) progressBar.classList.remove('visible');
-                    isProgressBarActivated = false;
-                } else if (Math.abs(deltaY) > swipeThresholdVertical) {
-                    if (deltaY < 0) {
-                        handleReaction('like');
-                        showFloatingReaction('like', endX, startY);
-                    } else {
-                        handleReaction('dislike');
-                        showFloatingReaction('dislike', endX, startY);
-                    }
-                }
-                isSwiping = false;
-            }
-
-            let isDragging = false;
-            function handleMouseStart(e) {
-                e.preventDefault();
-                isDragging = true;
-                startX = e.clientX;
-                startY = e.clientY;
-                touchTimeout = setTimeout(() => toggleVideoPlayback(), 200);
-                isSwiping = false;
-            }
-
-            function handleMouseMove(e) {
-                if (!isDragging) return;
-                endX = e.clientX;
-                endY = e.clientY;
-                const deltaX = endX - startX;
-                const deltaY = endY - startY;
-                if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
-                    clearTimeout(touchTimeout);
-                    isSwiping = true;
-                }
-            }
-
-            function handleMouseEnd() {
-                if (!isDragging) return;
-                isDragging = false;
-                const deltaX = endX - startX;
-                const deltaY = endY - startY;
-                const swipeThresholdHorizontal = 50;
-                const swipeThresholdVertical = 20;
-
-                if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
-                    isSwiping = false;
-                    return;
-                }
-
-                clearTimeout(touchTimeout);
-
-                if (!userId) {
-                    isSwiping = false;
-                    return;
-                }
-
-                if (Math.abs(deltaX) > swipeThresholdHorizontal && Math.abs(deltaX) > Math.abs(deltaY)) {
-                    if (deltaX > 0) playNextVideo();
-                    else playPreviousVideo();
-                    if (isProgressBarActivated) progressBar.classList.remove('visible');
-                    isProgressBarActivated = false;
-                } else if (Math.abs(deltaY) > swipeThresholdVertical) {
-                    if (deltaY < 0) {
-                        handleReaction('like');
-                        showFloatingReaction('like', endX, startY);
-                    } else {
-                        handleReaction('dislike');
-                        showFloatingReaction('dislike', endX, startY);
-                    }
-                }
-                isSwiping = false;
-            }
-
-            function showFloatingReaction(type, x, y) {
-                const reaction = document.createElement('div');
-                reaction.className = `floating-reaction ${type}`;
-                reaction.innerHTML = type === 'like' ? '👍' : '👎';
-                reaction.style.left = `${x}px`;
-                reaction.style.top = `${y}px`;
-                document.body.appendChild(reaction);
-                setTimeout(() => reaction.remove(), 1500);
-            }
-        }
-
-        function playNextVideo() {
-            recommendNextVideo();
-            loadVideo('left');
-            hasViewed = false;
-        }
-
-        function playPreviousVideo() {
-            currentVideoIndex = (currentVideoIndex - 1 + videoPlaylist.length) % videoPlaylist.length;
-            loadVideo('right');
-            hasViewed = false;
-        }
-
-        function loadVideo(direction = 'left') {
-            const fadeOutClass = direction === 'left' ? 'fade-out-left' : 'fade-out-right';
-            video.classList.remove('fade-in');
-            video.classList.add(fadeOutClass);
-            video.pause();
-            setTimeout(() => {
-                videoSource.src = videoPlaylist[currentVideoIndex];
-                video.load();
-                video.addEventListener('canplay', () => {
-                    const lastPosition = videoDataStore[currentVideoIndex].lastPosition;
-                    video.classList.remove('fade-out-left', 'fade-out-right');
-                    video.classList.add('fade-in');
-                    if (lastPosition > 0 && lastPosition < video.duration) {
-                        showResumePrompt(lastPosition);
-                    } else {
-                        video.play().catch(err => console.log("Ошибка воспроизведения:", err));
-                    }
-                }, { once: true });
-                updateCounters();
-                updateComments();
-                updateRating();
-                updateDescription();
-                preloadNextVideo();
-            }, 300);
-        }
-
-        function showResumePrompt(lastPosition) {
-            const resumePrompt = document.createElement('div');
-            resumePrompt.style.cssText = `
-                position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                background: var(--notification-bg); color: var(--notification-text);
-                padding: 20px; border-radius: 10px; z-index: 100; text-align: center;
-            `;
-            resumePrompt.innerHTML = `
-                <p>Продолжить с ${formatTime(lastPosition)}?</p>
-                <button id="resumeYes">Да</button>
-                <button id="resumeNo">Нет</button>
-            `;
-            document.body.appendChild(resumePrompt);
-
-            document.getElementById('resumeYes').addEventListener('click', () => {
-                video.currentTime = lastPosition;
-                video.play();
-                document.body.removeChild(resumePrompt);
-            });
-
-            document.getElementById('resumeNo').addEventListener('click', () => {
-                video.currentTime = 0;
-                video.play();
-                document.body.removeChild(resumePrompt);
-            });
-        }
-
-        function addComment() {
-            const videoData = videoDataStore[currentVideoIndex];
-            const text = commentInput.value.trim();
-            if (text && userId) {
-                videoData.comments.push({
-                    userId: userId,
-                    text: text,
-                    replyTo: commentInput.dataset.replyTo || null
-                });
-                commentInput.value = '';
-                commentInput.dataset.replyTo = '';
-                commentInput.placeholder = 'Введите комментарий';
-                updateComments();
-                updateCounters();
-                updateVideoCache(currentVideoIndex);
-            }
-        }
-
-        function updateComments() {
-            const videoData = videoDataStore[currentVideoIndex];
-            commentsList.innerHTML = '';
-            videoData.comments.forEach((comment, idx) => {
-                const userPhoto = (tg?.initDataUnsafe?.user?.id === comment.userId && tg?.initDataUnsafe?.user?.photo_url) 
-                    ? tg.initDataUnsafe.user.photo_url 
-                    : 'https://via.placeholder.com/30';
-                const username = (tg?.initDataUnsafe?.user?.id === comment.userId && tg?.initDataUnsafe?.user?.username) 
-                    ? `@${tg.initDataUnsafe.user.username}` 
-                    : `User_${comment.userId.slice(0, 5)}`;
-                const isOwnComment = comment.userId === userId;
-                const commentEl = document.createElement('div');
-                commentEl.className = 'comment';
-                commentEl.innerHTML = `
-                    <img src="${userPhoto}" alt="User Avatar" class="comment-avatar" data-user-id="${comment.userId}">
-                    <div class="comment-content">
-                        <span class="comment-username">${username}</span>
-                        <div class="comment-text">${comment.text}${comment.replyTo !== null && videoData.comments[comment.replyTo] ? `<blockquote>Цитата: ${videoData.comments[comment.replyTo].text}</blockquote>` : ''}</div>
-                    </div>
-                    <button class="reply-btn" data-index="${idx}">Ответить</button>
-                    ${isOwnComment ? `<button class="delete-comment-btn" data-index="${idx}">Удалить</button>` : ''}
-                `;
-                commentsList.appendChild(commentEl);
-                commentEl.querySelector('.reply-btn').addEventListener('click', () => replyToComment(idx));
-                if (isOwnComment) {
-                    commentEl.querySelector('.delete-comment-btn').addEventListener('click', () => deleteComment(idx));
-                }
-                commentEl.querySelector('.comment-avatar').addEventListener('click', () => {
-                    const channel = channels[comment.userId];
-                    if (channel && channel.link) {
-                        if (tg?.isVersionGte('6.0')) {
-                            tg.openTelegramLink(channel.link);
-                        } else {
-                            window.open(channel.link, '_blank');
-                        }
-                    } else {
-                        showNotification('Канал не зарегистрирован');
-                    }
+    // Привязка элементов DOM
+    bindElements() {
+        this.authScreen = document.getElementById('authScreen');
+        this.playerContainer = document.getElementById('playerContainer');
+        this.authBtn = document.getElementById('authBtn');
+        this.registerChannelBtn = document.getElementById('registerChannelBtn');
+        this.userAvatar = document.getElementById('userAvatar');
+        this.video = document.getElementById('videoPlayer');
+        this.videoSource = document.getElementById('videoSource');
+        this.viewCountEl = document.getElementById('viewCount');
+        this.likeCountEl = document.getElementById('likeCount');
+        this.dislikeCountEl = document.getElementById('dislikeCount');
+        this.commentCountEl = document.getElementById('commentCount');
+        this.shareCountEl = document.getElementById('shareCount');
+        this.ratingEl = document.getElementById('rating');
+        this.reactionBar = document.getElementById('reactionBar');
+        this.reactionButtons = document.querySelectorAll('.reaction-btn');
+        this.swipeArea = document.getElementById('swipeArea');
+        this.reactionAnimation = document.getElementById('reactionAnimation');
+        this.progressBar = document.getElementById('progressBar');
+        this.progressRange = document.getElementById('progressRange');
+        this.commentsWindow = document.getElementById('commentsWindow');
+        this.commentsList = document.getElementById('commentsList');
+        this.commentInput = document.getElementById('commentInput');
+        this.sendCommentBtn = document.getElementById('sendComment');
+        this.themeToggle = document.querySelector('.theme-toggle');
+        this.toggleReactionBar = document.querySelector('.toggle-reaction-bar');
+        this.plusBtn = document.querySelector('.plus-btn');
+        this.uploadBtn = document.querySelector('.upload-btn');
+        this.submenuUpload = document.getElementById('uploadVideo');
+        this.submenuChat = document.getElementById('chatAuthor');
+        this.uploadModal = document.getElementById('uploadModal');
+        this.uploadProgress = document.getElementById('progressBarInner');
+        this.uploadPreview = document.getElementById('uploadPreview');
+        this.publishBtn = document.getElementById('publishBtn');
+        this.cancelBtn = document.getElementById('cancelBtn');
+        this.chatModal = document.getElementById('chatModal');
+        this.chatMessages = document.getElementById('chatMessages');
+        this.chatInput = document.getElementById('chatInput');
+        this.sendChatMessage = document.getElementById('sendChatMessage');
+        this.closeChat = document.getElementById('closeChat');
+        this.shareModal = document.getElementById('shareModal');
+        this.shareTelegram = document.getElementById('shareTelegram');
+        this.copyLink = document.getElementById('copyLink');
+        this.closeShare = document.getElementById('closeShare');
+        this.videoUpload = document.createElement('input');
+        this.videoUpload.type = 'file';
+        this.videoUpload.accept = 'video/mp4,video/quicktime,video/webm';
+        this.videoUpload.style.display = 'none';
+        document.body.appendChild(this.videoUpload);
+    }
+
+    // Привязка событий
+    bindEvents() {
+        this.authBtn.addEventListener('click', () => this.handleAuth());
+        if (this.registerChannelBtn) this.bindRegisterChannelBtn();
+        if (this.userAvatar) this.bindUserAvatar();
+        this.reactionButtons.forEach(btn => btn.addEventListener('click', (e) => this.handleReaction(btn.dataset.type, e)));
+        this.plusBtn.addEventListener('click', (e) => this.toggleSubmenu(e));
+        this.uploadBtn.addEventListener('click', (e) => this.downloadCurrentVideo(e));
+        this.toggleReactionBar.addEventListener('click', (e) => this.toggleReactionBarVisibility(e));
+        this.video.addEventListener('loadedmetadata', () => this.handleLoadedMetadata(), { once: true });
+        this.video.addEventListener('play', () => this.handlePlay());
+        this.video.addEventListener('pause', () => this.handlePause());
+        this.video.addEventListener('ended', () => this.handleEnded());
+        this.video.addEventListener('timeupdate', () => this.handleTimeUpdate());
+        this.progressRange.addEventListener('input', (e) => this.handleProgressInput(e));
+        this.setupSwipeAndMouseEvents();
+        this.sendCommentBtn.addEventListener('click', () => this.addComment());
+        this.commentInput.addEventListener('keypress', (e) => e.key === 'Enter' && this.addComment());
+        this.submenuUpload.addEventListener('click', (e) => this.handleSubmenuUpload(e));
+        this.videoUpload.addEventListener('change', (e) => this.handleVideoUpload(e));
+        this.publishBtn.addEventListener('click', () => this.publishVideo());
+        this.cancelBtn.addEventListener('click', () => this.cancelUpload());
+        this.submenuChat.addEventListener('click', (e) => this.handleSubmenuChat(e));
+        this.sendChatMessage.addEventListener('click', () => this.sendChat());
+        this.chatInput.addEventListener('keypress', (e) => e.key === 'Enter' && this.sendChat());
+        this.closeChat.addEventListener('click', () => this.chatModal.classList.remove('visible'));
+        this.shareTelegram.addEventListener('click', () => this.shareViaTelegram());
+        this.copyLink.addEventListener('click', () => this.copyVideoLink());
+        this.closeShare.addEventListener('click', () => this.shareModal.classList.remove('visible'));
+        this.themeToggle.addEventListener('click', () => this.toggleTheme());
+        document.querySelector('.drag-handle')?.addEventListener('mousedown', (e) => this.startDragging(e));
+        document.querySelector('.drag-handle')?.addEventListener('touchstart', (e) => this.startDragging(e), { passive: false });
+        document.querySelector('.fullscreen-btn')?.addEventListener('click', (e) => this.toggleFullscreen(e));
+        document.addEventListener('click', (e) => this.hideManagementListOnClickOutside(e));
+    }
+
+    // Загрузка начальных видео из Firestore
+    async loadInitialVideos() {
+        try {
+            const snapshot = await db.collection('publicVideos').orderBy('timestamp', 'desc').limit(10).get();
+            this.videoPlaylist = [];
+            this.videoDataStore = [];
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                this.videoPlaylist.push(data.url);
+                this.videoDataStore.push({
+                    views: new Set(data.views || []),
+                    likes: data.likes || 0,
+                    dislikes: data.dislikes || 0,
+                    userLikes: new Set(data.userLikes || []),
+                    userDislikes: new Set(data.userDislikes || []),
+                    comments: data.comments || [],
+                    shares: data.shares || 0,
+                    viewTime: data.viewTime || 0,
+                    replays: data.replays || 0,
+                    duration: data.duration || 0,
+                    authorId: data.authorId,
+                    lastPosition: data.lastPosition || 0,
+                    chatMessages: data.chatMessages || [],
+                    description: data.description || ''
                 });
             });
-            commentsList.scrollTop = commentsList.scrollHeight;
-        }
-
-        function replyToComment(index) {
-            commentInput.dataset.replyTo = index;
-            commentInput.placeholder = `Ответ на: "${videoDataStore[currentVideoIndex].comments[index].text.slice(0, 20)}..."`;
-            commentInput.focus();
-        }
-
-        function deleteComment(index) {
-            if (confirm('Удалить этот комментарий?')) {
-                videoDataStore[currentVideoIndex].comments.splice(index, 1);
-                updateComments();
-                updateCounters();
-                updateVideoCache(currentVideoIndex);
-                showNotification('Комментарий удалён');
-            }
-        }
-
-        function updateDescription() {
-            let descriptionEl = document.getElementById('videoDescriptionDisplay');
-            if (!descriptionEl) {
-                descriptionEl = document.createElement('div');
-                descriptionEl.id = 'videoDescriptionDisplay';
-                const videoWrapper = document.querySelector('.video-wrapper');
-                videoWrapper.insertAdjacentElement('afterend', descriptionEl);
-            }
-            descriptionEl.textContent = videoDataStore[currentVideoIndex].description || 'Описание отсутствует';
-        }
-
-        function updateChat() {
-            const videoData = videoDataStore[currentVideoIndex];
-            chatMessages.innerHTML = '';
-            videoData.chatMessages.forEach(msg => {
-                const messageEl = document.createElement('div');
-                messageEl.className = `message ${msg.sender === userId ? 'sent' : 'received'}`;
-                messageEl.textContent = msg.text;
-                chatMessages.appendChild(messageEl);
-            });
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-
-        function sendChat() {
-            const videoData = videoDataStore[currentVideoIndex];
-            const text = chatInput.value.trim();
-            if (text) {
-                videoData.chatMessages.push({ sender: userId, text });
-                chatInput.value = '';
-                updateChat();
-                updateVideoCache(currentVideoIndex);
-                setTimeout(() => {
-                    videoData.chatMessages.push({ sender: videoData.authorId, text: "Спасибо за сообщение!" });
-                    updateChat();
-                    updateVideoCache(currentVideoIndex);
-                }, 1000);
-            }
-        }
-
-        function handleSubmenuChat(e) {
-            e.stopPropagation();
-            chatModal.classList.add('visible');
-            updateChat();
-            toggleSubmenu();
-        }
-
-        function shareViaTelegram() {
-            const videoUrl = videoPlaylist[currentVideoIndex];
-            const description = videoDataStore[currentVideoIndex].description || 'Смотри это крутое видео!';
-            const text = `${description}\n${videoUrl}`;
-            if (tg?.isVersionGte('6.0')) {
-                tg.openShareUrl(`https://t.me/share/url?url=${encodeURIComponent(videoUrl)}&text=${encodeURIComponent(description)}`);
-            } else {
-                navigator.clipboard.writeText(text).then(() => {
-                    showNotification('Ссылка скопирована! Вставьте её в Telegram.');
-                }).catch(err => {
-                    console.error('Ошибка копирования:', err);
-                    showNotification('Не удалось скопировать ссылку');
-                });
-            }
-            shareModal.classList.remove('visible');
-            videoDataStore[currentVideoIndex].shares++;
-            updateCounters();
-            updateVideoCache(currentVideoIndex);
-        }
-
-        function copyVideoLink() {
-            const videoUrl = videoPlaylist[currentVideoIndex];
-            navigator.clipboard.writeText(videoUrl).then(() => {
-                showNotification('Ссылка скопирована!');
-                shareModal.classList.remove('visible');
-            }).catch(err => {
-                console.error('Ошибка копирования:', err);
-                showNotification('Не удалось скопировать ссылку');
-            });
-        }
-
-        function handleVideoUpload(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const maxSize = 100 * 1024 * 1024;
-            const validTypes = ['video/mp4', 'video/quicktime', 'video/webm'];
-
-            if (file.size > maxSize) {
-                showNotification('Файл слишком большой! Максимум 100 МБ.');
-                return;
-            }
-
-            if (!validTypes.includes(file.type)) {
-                showNotification('Неподдерживаемый формат! Используйте MP4, MOV или WebM.');
-                return;
-            }
-
-            uploadModal.classList.add('visible');
-            uploadProgress.style.width = '0%';
-            uploadPreview.style.display = 'none';
-            publishBtn.disabled = true;
-
-            const storageRef = storage.ref(`videos/${userId}/${Date.now()}_${file.name}`);
-            const uploadTask = storageRef.put(file);
-
-            uploadTask.on('state_changed',
-                (snapshot) => {
-                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                    uploadProgress.style.width = `${progress}%`;
-                },
-                (error) => {
-                    console.error('Ошибка загрузки:', error);
-                    showNotification('Ошибка при загрузке видео!');
-                    uploadModal.classList.remove('visible');
-                },
-                () => {
-                    uploadTask.snapshot.ref.getDownloadURL().then((downloadURL) => {
-                        uploadPreview.src = downloadURL;
-                        uploadPreview.style.display = 'block';
-                        publishBtn.disabled = false;
-                        uploadedFileUrl = downloadURL;
-
-                        db.collection('publicVideos').add({
-                            url: downloadURL,
-                            authorId: userId,
-                            description: document.getElementById('videoDescription')?.value || '',
-                            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                        }).then(() => {
-                            console.log('Видео добавлено в общий доступ');
-                        }).catch(err => console.error('Ошибка Firestore:', err));
-                    });
-                }
-            );
-        }
-
-        function publishVideo() {
-            if (uploadedFileUrl) {
-                cleanVideoPlaylist();
-                const duration = uploadPreview.duration;
-                const description = document.getElementById('videoDescription')?.value || '';
-                videoPlaylist.push(uploadedFileUrl);
-                videoDataStore.push({
+            if (!this.videoPlaylist.length) {
+                this.videoPlaylist = [
+                    "https://www.w3schools.com/html/mov_bbb.mp4",
+                    "https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4",
+                    "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"
+                ];
+                this.videoDataStore = this.videoPlaylist.map(() => ({
                     views: new Set(),
                     likes: 0,
                     dislikes: 0,
@@ -1041,290 +179,1204 @@ document.addEventListener('DOMContentLoaded', () => {
                     shares: 0,
                     viewTime: 0,
                     replays: 0,
-                    duration: duration,
-                    authorId: userId,
+                    duration: 0,
+                    authorId: 'testAuthor123',
                     lastPosition: 0,
                     chatMessages: [],
-                    description: description
-                });
-
-                addVideoToManagementList(uploadedFileUrl, description);
-
-                if (channels[userId]) {
-                    channels[userId].videos.push(uploadedFileUrl);
-                    localStorage.setItem('channels', JSON.stringify(channels));
-                }
-
-                currentVideoIndex = videoPlaylist.length - 1;
-                loadVideo();
-                updateVideoCache(currentVideoIndex);
-                showNotification('Видео успешно загружено и добавлено в ваш канал!');
-                uploadModal.classList.remove('visible');
-                document.getElementById('videoDescription').value = '';
-                uploadedFileUrl = null;
+                    description: ''
+                }));
             }
-        }
-
-        function cancelUpload() {
-            if (uploadedFileUrl) {
-                uploadedFileUrl = null;
-            }
-            uploadModal.classList.remove('visible');
-        }
-
-        function addVideoToManagementList(url, description) {
-            const managementList = document.getElementById('videoManagementList') || createManagementList();
-            const videoItem = document.createElement('div');
-            videoItem.className = 'video-item';
-            videoItem.innerHTML = `
-                <span>${description || 'Без описания'}</span>
-                <button class="edit-btn" data-url="${url}">Редактировать</button>
-                <button class="delete-btn" data-url="${url}">Удалить</button>
-            `;
-            managementList.appendChild(videoItem);
-
-            videoItem.querySelector('.edit-btn').addEventListener('click', () => editVideo(url));
-            videoItem.querySelector('.delete-btn').addEventListener('click', () => deleteVideo(url));
-        }
-
-        function createManagementList() {
-            const list = document.createElement('div');
-            list.id = 'videoManagementList';
-            list.style.cssText = 'position: absolute; bottom: 6vh; left: 2vw; background: rgba(0, 0, 0, 0.8); padding: 10px; border-radius: 10px; z-index: 100; display: none;';
-            const closeBtn = document.createElement('button');
-            closeBtn.className = 'close-list-btn';
-            closeBtn.innerHTML = '<i class="fas fa-times"></i>';
-            closeBtn.addEventListener('click', () => list.classList.remove('visible'));
-            list.appendChild(closeBtn);
-            document.body.appendChild(list);
-            return list;
-        }
-
-        function editVideo(url) {
-            const index = videoPlaylist.indexOf(url);
-            if (index === -1) return;
-            const newDescription = prompt('Введите новое описание:', videoDataStore[index].description);
-            if (newDescription !== null) {
-                videoDataStore[index].description = newDescription;
-                updateVideoCache(index);
-                document.querySelector(`.video-item [data-url="${url}"]`).parentElement.querySelector('span').textContent = newDescription || 'Без описания';
-                showNotification('Описание обновлено!');
-                if (currentVideoIndex === index) updateDescription();
-            }
-        }
-
-        function deleteVideo(url) {
-            const index = videoPlaylist.indexOf(url);
-            if (index === -1) return;
-            if (confirm('Удалить это видео?')) {
-                const storageRef = storage.refFromURL(url);
-                storageRef.delete().then(() => {
-                    console.log('Видео удалено из Storage');
-                    db.collection('publicVideos').where('url', '==', url).get().then((querySnapshot) => {
-                        querySnapshot.forEach((doc) => doc.ref.delete());
-                        console.log('Видео удалено из Firestore');
-                    }).catch(err => console.error('Ошибка удаления из Firestore:', err));
-                }).catch(err => console.error('Ошибка удаления из Storage:', err));
-
-                videoPlaylist.splice(index, 1);
-                videoDataStore.splice(index, 1);
-                localStorage.removeItem(`videoData_${url}`);
-                document.querySelector(`.video-item [data-url="${url}"]`).parentElement.remove();
-                if (currentVideoIndex === index) {
-                    currentVideoIndex = Math.min(currentVideoIndex, videoPlaylist.length - 1);
-                    loadVideo();
-                }
-                showNotification('Видео удалено!');
-            }
-        }
-
-        function showVideoManagementList() {
-            const list = document.getElementById('videoManagementList');
-            if (list.classList.contains('visible')) {
-                list.classList.remove('visible');
-            } else {
-                list.classList.add('visible');
-            }
-        }
-
-        function updateCounters() {
-            const videoData = videoDataStore[currentVideoIndex];
-            if (viewCountEl) viewCountEl.textContent = videoData.views.size;
-            if (likeCountEl) likeCountEl.textContent = videoData.likes;
-            if (dislikeCountEl) dislikeCountEl.textContent = videoData.dislikes;
-            if (commentCountEl) commentCountEl.textContent = videoData.comments.length;
-            if (shareCountEl) shareCountEl.textContent = videoData.shares;
-            updateRating();
-        }
-
-        function calculateVideoScore(videoData, duration) {
-            const avgViewTimePerView = videoData.viewTime / (videoData.views.size || 1);
-            let viewTimeRatio = avgViewTimePerView / duration;
-            if (viewTimeRatio > 1) viewTimeRatio = 1 + (videoData.replays / (videoData.views.size || 1));
-            const rawScore = (videoData.likes * 5.0) + (videoData.comments.length * 10.0) + (videoData.shares * 15.0) + (videoData.viewTime * 0.1) + (videoData.replays * 20.0) * (1 + viewTimeRatio);
-            const maxPossibleScore = 50;
-            const normalizedScore = Math.max(0, Math.min(5, (rawScore / maxPossibleScore) * 5));
-            return normalizedScore;
-        }
-
-        function updateRating() {
-            const videoData = videoDataStore[currentVideoIndex];
-            const duration = videoData.duration || 300;
-            const score = calculateVideoScore(videoData, duration);
-            const fullStars = Math.floor(score);
-            const halfStar = score % 1 >= 0.5 ? 1 : 0;
-            const emptyStars = Math.max(0, 5 - fullStars - halfStar);
-            if (ratingEl) ratingEl.innerHTML = '★'.repeat(fullStars) + (halfStar ? '☆' : '') + '☆'.repeat(emptyStars);
-        }
-
-        function recommendNextVideo() {
-            const scores = videoPlaylist.map((src, index) => {
-                const data = videoDataStore[index];
-                const duration = data.duration || 300;
-                return { index, score: calculateVideoScore(data, duration) };
-            });
-            scores.sort((a, b) => b.score - a.score);
-            const nextVideo = scores.find(item => item.index !== currentVideoIndex) || scores[0];
-            currentVideoIndex = nextVideo.index;
-        }
-
-        function preloadNextVideo() {
-            cleanPreloadedVideos();
-            const nextIndex = (currentVideoIndex + 1) % videoPlaylist.length;
-            if (!preloadedVideos[nextIndex]) {
-                const preloadVideo = document.createElement('video');
-                preloadVideo.src = videoPlaylist[nextIndex];
-                preloadVideo.preload = 'auto';
-                preloadedVideos[nextIndex] = preloadVideo;
-            }
-            const prevIndex = (currentVideoIndex - 1 + videoPlaylist.length) % videoPlaylist.length;
-            if (!preloadedVideos[prevIndex]) {
-                const preloadVideo = document.createElement('video');
-                preloadVideo.src = videoPlaylist[prevIndex];
-                preloadVideo.preload = 'auto';
-                preloadedVideos[prevIndex] = preloadVideo;
-            }
-        }
-
-        function cleanPreloadedVideos() {
-            const keys = Object.keys(preloadedVideos).map(Number);
-            if (keys.length <= MAX_PRELOAD_SIZE) return;
-
-            const current = currentVideoIndex;
-            const prev = (current - 1 + videoPlaylist.length) % videoPlaylist.length;
-            const next = (current + 1) % videoPlaylist.length;
-
-            for (let key of keys) {
-                if (key !== current && key !== prev && key !== next) {
-                    const videoEl = preloadedVideos[key];
-                    if (videoEl && videoEl.src) URL.revokeObjectURL(videoEl.src);
-                    delete preloadedVideos[key];
-                }
-            }
-        }
-
-        function cleanVideoPlaylist() {
-            if (videoPlaylist.length > MAX_PLAYLIST_SIZE) {
-                const removeCount = videoPlaylist.length - MAX_PLAYLIST_SIZE;
-                for (let i = 0; i < removeCount; i++) {
-                    const url = videoPlaylist[i];
-                    if (url.startsWith('blob:')) URL.revokeObjectURL(url);
-                    localStorage.removeItem(`videoData_${url}`);
-                }
-                videoPlaylist.splice(0, removeCount);
-                videoDataStore.splice(0, removeCount);
-                currentVideoIndex -= removeCount;
-                if (currentVideoIndex < 0) currentVideoIndex = 0;
-            }
-        }
-
-        function updateVideoCache(index) {
-            const videoData = videoDataStore[index];
-            const url = videoPlaylist[index];
-            const cacheData = {
-                duration: videoData.duration,
-                lastPosition: videoData.lastPosition,
-                userLikes: Array.from(videoData.userLikes),
-                userDislikes: Array.from(videoData.userDislikes),
-                comments: videoData.comments,
-                chatMessages: videoData.chatMessages,
-                likes: videoData.likes,
-                dislikes: videoData.dislikes,
-                shares: videoData.shares,
-                viewTime: videoData.viewTime,
-                replays: videoData.replays,
-                views: Array.from(videoData.views),
-                description: videoData.description
-            };
-            localStorage.setItem(`videoData_${url}`, JSON.stringify(cacheData));
-        }
-
-        function initializeTheme() {
-            const savedTheme = localStorage.getItem('theme') || 'dark';
-            if (savedTheme === 'dark') {
-                document.body.classList.add('dark');
-                themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
-            } else {
-                document.body.classList.remove('dark');
-                themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
-            }
-        }
-
-        function toggleTheme() {
-            if (document.body.classList.contains('dark')) {
-                document.body.classList.remove('dark');
-                themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
-                localStorage.setItem('theme', 'light');
-            } else {
-                document.body.classList.add('dark');
-                themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
-                localStorage.setItem('theme', 'dark');
-            }
-        }
-
-        function initializeTooltips() {
-            const isFirstVisit = !localStorage.getItem('hasSeenTooltips');
-            if (isFirstVisit) {
-                tooltips.forEach(tooltip => {
-                    tooltip.classList.add('visible');
-                    setTimeout(() => tooltip.classList.remove('visible'), 5000);
-                });
-                localStorage.setItem('hasSeenTooltips', 'true');
-            }
-        }
-
-        function showNotification(message) {
-            const notification = document.createElement('div');
-            notification.style.cssText = `
-                position: fixed; top: 10%; left: 50%; transform: translateX(-50%);
-                background: var(--notification-bg); color: var(--notification-text);
-                padding: 10px 20px; border-radius: 5px; z-index: 1000;
-                opacity: 0; transition: opacity 0.3s ease;
-            `;
-            notification.textContent = message;
-            document.body.appendChild(notification);
-            setTimeout(() => notification.style.opacity = '1', 10);
-            setTimeout(() => {
-                notification.style.opacity = '0';
-                setTimeout(() => document.body.removeChild(notification), 300);
-            }, 3000);
-        }
-
-        function formatTime(seconds) {
-            const minutes = Math.floor(seconds / 60);
-            const secs = Math.floor(seconds % 60);
-            return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
-        }
-
-        function throttle(func, limit) {
-            let inThrottle;
-            return function (...args) {
-                if (!inThrottle) {
-                    func.apply(this, args);
-                    inThrottle = true;
-                    setTimeout(() => inThrottle = false, limit);
-                }
-            };
+            this.loadVideo();
+        } catch (error) {
+            console.error('Ошибка загрузки видео из Firestore:', error);
+            this.showNotification('Ошибка загрузки видео!');
         }
     }
+
+    // Авторизация
+    handleAuth() {
+        if (this.tg?.initDataUnsafe?.user) {
+            this.userId = this.tg.initDataUnsafe.user.id;
+            this.showPlayer();
+        } else {
+            this.userId = 'browserTestUser';
+            this.showNotification('Имитация: Вы вошли как ' + this.userId);
+            this.showPlayer();
+        }
+    }
+
+    // Показать плеер
+    showPlayer() {
+        this.authScreen.style.display = 'none';
+        this.playerContainer.style.display = 'flex';
+        this.initializePlayer();
+    }
+
+    // Привязка кнопки регистрации канала
+    bindRegisterChannelBtn() {
+        this.registerChannelBtn.addEventListener('click', () => this.registerChannel());
+    }
+
+    // Привязка аватара пользователя
+    bindUserAvatar() {
+        this.userAvatar.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!this.isHolding) {
+                const channel = this.channels[this.userId];
+                if (channel && channel.link) {
+                    if (this.tg?.isVersionGte('6.0')) {
+                        this.tg.openTelegramLink(channel.link);
+                    } else {
+                        window.open(channel.link, '_blank');
+                    }
+                } else {
+                    this.registerChannel();
+                }
+            }
+        });
+
+        let holdTimeout = null;
+        const holdDuration = 2000;
+        this.isHolding = false;
+
+        const startHold = (e) => {
+            e.preventDefault();
+            if (holdTimeout || this.isHolding) return;
+            this.isHolding = true;
+            this.userAvatar.classList.add('holding');
+            holdTimeout = setTimeout(() => {
+                this.showVideoManagementList();
+                holdTimeout = null;
+                this.isHolding = false;
+                this.userAvatar.classList.remove('holding');
+            }, holdDuration);
+        };
+
+        const stopHold = () => {
+            if (holdTimeout) {
+                clearTimeout(holdTimeout);
+                holdTimeout = null;
+            }
+            this.isHolding = false;
+            this.userAvatar.classList.remove('holding');
+        };
+
+        this.userAvatar.addEventListener('mousedown', startHold);
+        this.userAvatar.addEventListener('mouseup', stopHold);
+        this.userAvatar.addEventListener('mouseleave', stopHold);
+        this.userAvatar.addEventListener('touchstart', startHold, { passive: false });
+        this.userAvatar.addEventListener('touchend', stopHold);
+        this.userAvatar.addEventListener('touchcancel', stopHold);
+        this.userAvatar.addEventListener('touchmove', stopHold, { passive: false });
+    }
+
+    // Регистрация канала
+    registerChannel() {
+        if (!this.tg?.initDataUnsafe?.user && !this.userId) {
+            this.showNotification('Пожалуйста, войдите через Telegram.');
+            return;
+        }
+
+        if (this.channels[this.userId]?.link) {
+            this.showNotification('Канал уже зарегистрирован!');
+            if (this.tg?.isVersionGte('6.0')) {
+                this.tg.openTelegramLink(this.channels[this.userId].link);
+            } else {
+                window.open(this.channels[this.userId].link, '_blank');
+            }
+            return;
+        }
+
+        const channelLink = prompt('Введите ссылку на ваш Telegram-канал (например, https://t.me/yourchannel):');
+        if (channelLink && channelLink.match(/^https:\/\/t\.me\/[a-zA-Z0-9_]+$/)) {
+            this.channels[this.userId] = { videos: [], link: channelLink };
+            localStorage.setItem('channels', JSON.stringify(this.channels));
+            this.showNotification('Канал успешно зарегистрирован!');
+            if (this.authScreen.style.display !== 'none') this.showPlayer();
+        } else {
+            this.showNotification('Введите корректную ссылку на Telegram-канал.');
+        }
+    }
+
+    // Инициализация плеера
+    initializePlayer() {
+        this.isSubmenuOpen = false;
+        this.isProgressBarActivated = false;
+        this.lastTime = 0;
+        this.hasViewed = false;
+        this.isSwiping = false;
+
+        if (this.userAvatar && this.tg?.initDataUnsafe?.user?.photo_url) {
+            this.userAvatar.src = this.tg.initDataUnsafe.user.photo_url;
+        } else if (this.userAvatar) {
+            this.userAvatar.src = 'https://via.placeholder.com/40';
+        }
+
+        this.initializeTheme();
+        this.initializeTooltips();
+    }
+
+    // Обработка загрузки метаданных видео
+    handleLoadedMetadata() {
+        this.video.muted = true;
+        this.video.play().then(() => {
+            this.video.pause();
+            this.video.muted = false;
+        }).catch(err => console.error('Unlock error:', err));
+        const videoData = this.videoDataStore[this.currentVideoIndex];
+        videoData.duration = this.video.duration;
+        this.progressRange.max = this.video.duration;
+        this.progressRange.value = videoData.lastPosition || 0;
+        this.updateVideoCache(this.currentVideoIndex);
+        this.updateRating();
+    }
+
+    // Обработка воспроизведения
+    handlePlay() {
+        const videoData = this.videoDataStore[this.currentVideoIndex];
+        if (!this.hasViewed && this.userId) {
+            videoData.views.add(this.userId);
+            this.hasViewed = true;
+            this.updateCounters();
+        }
+        if (this.isProgressBarActivated) this.progressBar.classList.remove('visible');
+        this.isProgressBarActivated = false;
+        this.commentsWindow.classList.remove('visible');
+        this.preloadNextVideo();
+    }
+
+    // Обработка паузы
+    handlePause() {
+        if (!this.isProgressBarActivated) {
+            this.isProgressBarActivated = true;
+            this.progressBar.classList.add('visible');
+        }
+        this.videoDataStore[this.currentVideoIndex].lastPosition = this.video.currentTime;
+        this.updateVideoCache(this.currentVideoIndex);
+    }
+
+    // Обработка окончания видео
+    handleEnded() {
+        const videoData = this.videoDataStore[this.currentVideoIndex];
+        if (this.video.currentTime >= this.video.duration * 0.9) videoData.replays++;
+        videoData.lastPosition = 0;
+        this.updateVideoCache(this.currentVideoIndex);
+        this.playNextVideo();
+    }
+
+    // Обработка обновления времени
+    handleTimeUpdate() {
+        const videoData = this.videoDataStore[this.currentVideoIndex];
+        videoData.viewTime += this.video.currentTime - this.lastTime;
+        videoData.lastPosition = this.video.currentTime;
+        this.lastTime = this.video.currentTime;
+        this.progressRange.value = this.video.currentTime;
+        this.updateVideoCache(this.currentVideoIndex);
+        this.updateRating();
+    }
+
+    // Обработка изменения прогресса
+    handleProgressInput(e) {
+        this.video.currentTime = e.target.value;
+        this.videoDataStore[this.currentVideoIndex].lastPosition = this.video.currentTime;
+        this.updateVideoCache(this.currentVideoIndex);
+    }
+
+    // Настройка событий свайпа и мыши
+    setupSwipeAndMouseEvents() {
+        let startX = 0, startY = 0, endX = 0, endY = 0;
+        let touchTimeout;
+
+        this.swipeArea.addEventListener('touchstart', (e) => this.handleTouchStart(e, touchTimeout), { passive: false });
+        this.swipeArea.addEventListener('touchmove', this.throttle((e) => this.handleTouchMove(e), 16), { passive: false });
+        this.swipeArea.addEventListener('touchend', (e) => this.handleTouchEnd(e, touchTimeout));
+
+        this.swipeArea.addEventListener('mousedown', (e) => this.handleMouseStart(e, touchTimeout));
+        this.swipeArea.addEventListener('mousemove', this.throttle((e) => this.handleMouseMove(e), 16));
+        this.swipeArea.addEventListener('mouseup', (e) => this.handleMouseEnd(e));
+    }
+
+    handleTouchStart(e, touchTimeout) {
+        e.preventDefault();
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        touchTimeout = setTimeout(() => this.toggleVideoPlayback(), 200);
+        this.isSwiping = false;
+    }
+
+    handleTouchMove(e) {
+        endX = e.touches[0].clientX;
+        endY = e.touches[0].clientY;
+        const deltaX = endX - startX;
+        const deltaY = endY - startY;
+
+        if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
+            clearTimeout(touchTimeout);
+            this.isSwiping = true;
+        }
+    }
+
+    handleTouchEnd(e, touchTimeout) {
+        const deltaX = endX - startX;
+        const deltaY = endY - startY;
+        const swipeThresholdHorizontal = 50;
+        const swipeThresholdVertical = 20;
+
+        if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+            this.isSwiping = false;
+            return;
+        }
+
+        clearTimeout(touchTimeout);
+
+        if (!this.userId) {
+            this.isSwiping = false;
+            return;
+        }
+
+        if (Math.abs(deltaX) > swipeThresholdHorizontal && Math.abs(deltaX) > Math.abs(deltaY)) {
+            if (deltaX > 0) this.playNextVideo();
+            else this.playPreviousVideo();
+            if (this.isProgressBarActivated) this.progressBar.classList.remove('visible');
+            this.isProgressBarActivated = false;
+        } else if (Math.abs(deltaY) > swipeThresholdVertical) {
+            if (deltaY < 0) {
+                this.handleReaction('like');
+                this.showFloatingReaction('like', endX, startY);
+            } else {
+                this.handleReaction('dislike');
+                this.showFloatingReaction('dislike', endX, startY);
+            }
+        }
+        this.isSwiping = false;
+    }
+
+    handleMouseStart(e, touchTimeout) {
+        e.preventDefault();
+        this.isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        touchTimeout = setTimeout(() => this.toggleVideoPlayback(), 200);
+        this.isSwiping = false;
+    }
+
+    handleMouseMove(e) {
+        if (!this.isDragging) return;
+        endX = e.clientX;
+        endY = e.clientY;
+        const deltaX = endX - startX;
+        const deltaY = endY - startY;
+        if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
+            clearTimeout(touchTimeout);
+            this.isSwiping = true;
+        }
+    }
+
+    handleMouseEnd(e) {
+        if (!this.isDragging) return;
+        this.isDragging = false;
+        const deltaX = endX - startX;
+        const deltaY = endY - startY;
+        const swipeThresholdHorizontal = 50;
+        const swipeThresholdVertical = 20;
+
+        if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+            this.isSwiping = false;
+            return;
+        }
+
+        clearTimeout(touchTimeout);
+
+        if (!this.userId) {
+            this.isSwiping = false;
+            return;
+        }
+
+        if (Math.abs(deltaX) > swipeThresholdHorizontal && Math.abs(deltaX) > Math.abs(deltaY)) {
+            if (deltaX > 0) this.playNextVideo();
+            else this.playPreviousVideo();
+            if (this.isProgressBarActivated) this.progressBar.classList.remove('visible');
+            this.isProgressBarActivated = false;
+        } else if (Math.abs(deltaY) > swipeThresholdVertical) {
+            if (deltaY < 0) {
+                this.handleReaction('like');
+                this.showFloatingReaction('like', endX, startY);
+            } else {
+                this.handleReaction('dislike');
+                this.showFloatingReaction('dislike', endX, startY);
+            }
+        }
+        this.isSwiping = false;
+    }
+
+    showFloatingReaction(type, x, y) {
+        const reaction = document.createElement('div');
+        reaction.className = `floating-reaction ${type}`;
+        reaction.innerHTML = type === 'like' ? '👍' : '👎';
+        reaction.style.left = `${x}px`;
+        reaction.style.top = `${y}px`;
+        document.body.appendChild(reaction);
+        setTimeout(() => reaction.remove(), 1500);
+    }
+
+    // Воспроизведение следующего видео
+    playNextVideo() {
+        this.recommendNextVideo();
+        this.loadVideo('left');
+        this.hasViewed = false;
+    }
+
+    // Воспроизведение предыдущего видео
+    playPreviousVideo() {
+        this.currentVideoIndex = (this.currentVideoIndex - 1 + this.videoPlaylist.length) % this.videoPlaylist.length;
+        this.loadVideo('right');
+        this.hasViewed = false;
+    }
+
+    // Загрузка видео
+    loadVideo(direction = 'left') {
+        const fadeOutClass = direction === 'left' ? 'fade-out-left' : 'fade-out-right';
+        this.video.classList.remove('fade-in');
+        this.video.classList.add(fadeOutClass);
+        this.video.pause();
+        setTimeout(() => {
+            this.videoSource.src = this.videoPlaylist[this.currentVideoIndex];
+            this.video.load();
+            this.video.addEventListener('canplay', () => {
+                const lastPosition = this.videoDataStore[this.currentVideoIndex].lastPosition;
+                this.video.classList.remove('fade-out-left', 'fade-out-right');
+                this.video.classList.add('fade-in');
+                if (lastPosition > 0 && lastPosition < this.video.duration) {
+                    this.showResumePrompt(lastPosition);
+                } else {
+                    this.video.play().catch(err => console.log("Ошибка воспроизведения:", err));
+                }
+            }, { once: true });
+            this.updateCounters();
+            this.updateComments();
+            this.updateRating();
+            this.updateDescription();
+            this.preloadNextVideo();
+        }, 300);
+    }
+
+    // Показать запрос на продолжение
+    showResumePrompt(lastPosition) {
+        const resumePrompt = document.createElement('div');
+        resumePrompt.style.cssText = `
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: var(--notification-bg); color: var(--notification-text);
+            padding: 20px; border-radius: 10px; z-index: 100; text-align: center;
+        `;
+        resumePrompt.innerHTML = `
+            <p>Продолжить с ${this.formatTime(lastPosition)}?</p>
+            <button id="resumeYes">Да</button>
+            <button id="resumeNo">Нет</button>
+        `;
+        document.body.appendChild(resumePrompt);
+
+        document.getElementById('resumeYes').addEventListener('click', () => {
+            this.video.currentTime = lastPosition;
+            this.video.play();
+            document.body.removeChild(resumePrompt);
+        });
+
+        document.getElementById('resumeNo').addEventListener('click', () => {
+            this.video.currentTime = 0;
+            this.video.play();
+            document.body.removeChild(resumePrompt);
+        });
+    }
+
+    // Добавление комментария
+    addComment() {
+        const videoData = this.videoDataStore[this.currentVideoIndex];
+        const text = this.commentInput.value.trim();
+        if (text && this.userId) {
+            videoData.comments.push({
+                userId: this.userId,
+                text: text,
+                replyTo: this.commentInput.dataset.replyTo || null
+            });
+            this.commentInput.value = '';
+            this.commentInput.dataset.replyTo = '';
+            this.commentInput.placeholder = 'Введите комментарий';
+            this.updateComments();
+            this.updateCounters();
+            this.updateVideoCache(this.currentVideoIndex);
+        }
+    }
+
+    // Обновление комментариев
+    updateComments() {
+        const videoData = this.videoDataStore[this.currentVideoIndex];
+        this.commentsList.innerHTML = '';
+        videoData.comments.forEach((comment, idx) => {
+            const userPhoto = (this.tg?.initDataUnsafe?.user?.id === comment.userId && this.tg?.initDataUnsafe?.user?.photo_url) 
+                ? this.tg.initDataUnsafe.user.photo_url 
+                : 'https://via.placeholder.com/30';
+            const username = (this.tg?.initDataUnsafe?.user?.id === comment.userId && this.tg?.initDataUnsafe?.user?.username) 
+                ? `@${this.tg.initDataUnsafe.user.username}` 
+                : `User_${comment.userId.slice(0, 5)}`;
+            const isOwnComment = comment.userId === this.userId;
+            const commentEl = document.createElement('div');
+            commentEl.className = 'comment';
+            commentEl.innerHTML = `
+                <img src="${userPhoto}" alt="User Avatar" class="comment-avatar" data-user-id="${comment.userId}">
+                <div class="comment-content">
+                    <span class="comment-username">${username}</span>
+                    <div class="comment-text">${comment.text}${comment.replyTo !== null && videoData.comments[comment.replyTo] ? `<blockquote>Цитата: ${videoData.comments[comment.replyTo].text}</blockquote>` : ''}</div>
+                </div>
+                <button class="reply-btn" data-index="${idx}">Ответить</button>
+                ${isOwnComment ? `<button class="delete-comment-btn" data-index="${idx}">Удалить</button>` : ''}
+            `;
+            this.commentsList.appendChild(commentEl);
+            commentEl.querySelector('.reply-btn').addEventListener('click', () => this.replyToComment(idx));
+            if (isOwnComment) {
+                commentEl.querySelector('.delete-comment-btn').addEventListener('click', () => this.deleteComment(idx));
+            }
+            commentEl.querySelector('.comment-avatar').addEventListener('click', () => {
+                const channel = this.channels[comment.userId];
+                if (channel && channel.link) {
+                    if (this.tg?.isVersionGte('6.0')) {
+                        this.tg.openTelegramLink(channel.link);
+                    } else {
+                        window.open(channel.link, '_blank');
+                    }
+                } else {
+                    this.showNotification('Канал не зарегистрирован');
+                }
+            });
+        });
+        this.commentsList.scrollTop = this.commentsList.scrollHeight;
+    }
+
+    replyToComment(index) {
+        this.commentInput.dataset.replyTo = index;
+        this.commentInput.placeholder = `Ответ на: "${this.videoDataStore[this.currentVideoIndex].comments[index].text.slice(0, 20)}..."`;
+        this.commentInput.focus();
+    }
+
+    deleteComment(index) {
+        if (confirm('Удалить этот комментарий?')) {
+            this.videoDataStore[this.currentVideoIndex].comments.splice(index, 1);
+            this.updateComments();
+            this.updateCounters();
+            this.updateVideoCache(this.currentVideoIndex);
+            this.showNotification('Комментарий удалён');
+        }
+    }
+
+    // Обновление описания
+    updateDescription() {
+        let descriptionEl = document.getElementById('videoDescriptionDisplay');
+        if (!descriptionEl) {
+            descriptionEl = document.createElement('div');
+            descriptionEl.id = 'videoDescriptionDisplay';
+            const videoWrapper = document.querySelector('.video-wrapper');
+            videoWrapper.insertAdjacentElement('afterend', descriptionEl);
+        }
+        descriptionEl.textContent = this.videoDataStore[this.currentVideoIndex].description || 'Описание отсутствует';
+    }
+
+    // Обновление чата
+    updateChat() {
+        const videoData = this.videoDataStore[this.currentVideoIndex];
+        this.chatMessages.innerHTML = '';
+        videoData.chatMessages.forEach(msg => {
+            const messageEl = document.createElement('div');
+            messageEl.className = `message ${msg.sender === this.userId ? 'sent' : 'received'}`;
+            messageEl.textContent = msg.text;
+            this.chatMessages.appendChild(messageEl);
+        });
+        this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+    }
+
+    // Отправка сообщения в чат
+    sendChat() {
+        const videoData = this.videoDataStore[this.currentVideoIndex];
+        const text = this.chatInput.value.trim();
+        if (text) {
+            videoData.chatMessages.push({ sender: this.userId, text });
+            this.chatInput.value = '';
+            this.updateChat();
+            this.updateVideoCache(this.currentVideoIndex);
+            setTimeout(() => {
+                videoData.chatMessages.push({ sender: videoData.authorId, text: "Спасибо за сообщение!" });
+                this.updateChat();
+                this.updateVideoCache(this.currentVideoIndex);
+            }, 1000);
+        }
+    }
+
+    // Обработка подменю чата
+    handleSubmenuChat(e) {
+        e.stopPropagation();
+        this.chatModal.classList.add('visible');
+        this.updateChat();
+        this.toggleSubmenu();
+    }
+
+    // Поделиться через Telegram
+    shareViaTelegram() {
+        const videoUrl = this.videoPlaylist[this.currentVideoIndex];
+        const description = this.videoDataStore[this.currentVideoIndex].description || 'Смотри это крутое видео!';
+        const text = `${description}\n${videoUrl}`;
+        if (this.tg?.isVersionGte('6.2')) {
+            this.tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(videoUrl)}&text=${encodeURIComponent(description)}`);
+        } else {
+            navigator.clipboard.writeText(text).then(() => {
+                this.showNotification('Ссылка скопирована! Вставьте её в Telegram.');
+            }).catch(err => {
+                console.error('Ошибка копирования:', err);
+                this.showNotification('Не удалось скопировать ссылку');
+            });
+        }
+        this.shareModal.classList.remove('visible');
+        this.videoDataStore[this.currentVideoIndex].shares++;
+        this.updateCounters();
+        this.updateVideoCache(this.currentVideoIndex);
+    }
+
+    // Копирование ссылки
+    copyVideoLink() {
+        const videoUrl = this.videoPlaylist[this.currentVideoIndex];
+        navigator.clipboard.writeText(videoUrl).then(() => {
+            this.showNotification('Ссылка скопирована!');
+            this.shareModal.classList.remove('visible');
+        }).catch(err => {
+            console.error('Ошибка копирования:', err);
+            this.showNotification('Не удалось скопировать ссылку');
+        });
+    }
+
+    // Загрузка видео
+    async handleVideoUpload(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const maxSize = 100 * 1024 * 1024;
+        const validTypes = ['video/mp4', 'video/quicktime', 'video/webm'];
+
+        if (file.size > maxSize) {
+            this.showNotification('Файл слишком большой! Максимум 100 МБ.');
+            return;
+        }
+
+        if (!validTypes.includes(file.type)) {
+            this.showNotification('Неподдерживаемый формат! Используйте MP4, MOV или WebM.');
+            return;
+        }
+
+        this.uploadModal.classList.add('visible');
+        this.uploadProgress.style.width = '0%';
+        this.uploadPreview.style.display = 'none';
+        this.publishBtn.disabled = true;
+
+        try {
+            const storageRef = storage.ref(`videos/${this.userId}/${Date.now()}_${file.name}`);
+            const uploadTask = storageRef.put(file);
+
+            uploadTask.on('state_changed',
+                (snapshot) => {
+                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                    this.uploadProgress.style.width = `${progress}%`;
+                },
+                (error) => {
+                    console.error('Ошибка загрузки:', error);
+                    this.showNotification('Ошибка при загрузке видео!');
+                    this.uploadModal.classList.remove('visible');
+                },
+                async () => {
+                    this.uploadedFileUrl = await uploadTask.snapshot.ref.getDownloadURL();
+                    this.uploadPreview.src = this.uploadedFileUrl;
+                    this.uploadPreview.style.display = 'block';
+                    this.publishBtn.disabled = false;
+
+                    await db.collection('publicVideos').add({
+                        url: this.uploadedFileUrl,
+                        authorId: this.userId,
+                        description: document.getElementById('videoDescription')?.value || '',
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                        views: [],
+                        likes: 0,
+                        dislikes: 0,
+                        userLikes: [],
+                        userDislikes: [],
+                        comments: [],
+                        shares: 0,
+                        viewTime: 0,
+                        replays: 0,
+                        duration: this.uploadPreview.duration || 0,
+                        lastPosition: 0,
+                        chatMessages: []
+                    });
+                }
+            );
+        } catch (error) {
+            console.error('Ошибка загрузки видео:', error);
+            this.showNotification('Ошибка загрузки видео!');
+        }
+    }
+
+    // Публикация видео
+    publishVideo() {
+        if (!this.uploadedFileUrl) return;
+
+        this.cleanVideoPlaylist();
+        const duration = this.uploadPreview.duration;
+        const description = document.getElementById('videoDescription')?.value || '';
+        this.videoPlaylist.push(this.uploadedFileUrl);
+        this.videoDataStore.push({
+            views: new Set(),
+            likes: 0,
+            dislikes: 0,
+            userLikes: new Set(),
+            userDislikes: new Set(),
+            comments: [],
+            shares: 0,
+            viewTime: 0,
+            replays: 0,
+            duration: duration,
+            authorId: this.userId,
+            lastPosition: 0,
+            chatMessages: [],
+            description: description
+        });
+
+        this.addVideoToManagementList(this.uploadedFileUrl, description);
+
+        if (this.channels[this.userId]) {
+            this.channels[this.userId].videos.push(this.uploadedFileUrl);
+            localStorage.setItem('channels', JSON.stringify(this.channels));
+        }
+
+        this.currentVideoIndex = this.videoPlaylist.length - 1;
+        this.loadVideo();
+        this.updateVideoCache(this.currentVideoIndex);
+        this.showNotification('Видео успешно загружено и добавлено в ваш канал!');
+        this.uploadModal.classList.remove('visible');
+        document.getElementById('videoDescription').value = '';
+        this.uploadedFileUrl = null;
+    }
+
+    // Отмена загрузки
+    cancelUpload() {
+        this.uploadedFileUrl = null;
+        this.uploadModal.classList.remove('visible');
+    }
+
+    // Добавление видео в список управления
+    addVideoToManagementList(url, description) {
+        const managementList = document.getElementById('videoManagementList') || this.createManagementList();
+        const videoItem = document.createElement('div');
+        videoItem.className = 'video-item';
+        videoItem.innerHTML = `
+            <span>${description || 'Без описания'}</span>
+            <button class="edit-btn" data-url="${url}">Редактировать</button>
+            <button class="delete-btn" data-url="${url}">Удалить</button>
+        `;
+        managementList.appendChild(videoItem);
+
+        videoItem.querySelector('.edit-btn').addEventListener('click', () => this.editVideo(url));
+        videoItem.querySelector('.delete-btn').addEventListener('click', () => this.deleteVideo(url));
+    }
+
+    // Создание списка управления
+    createManagementList() {
+        const list = document.createElement('div');
+        list.id = 'videoManagementList';
+        list.style.cssText = 'position: absolute; bottom: 6vh; left: 2vw; background: rgba(0, 0, 0, 0.8); padding: 10px; border-radius: 10px; z-index: 100; display: none;';
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'close-list-btn';
+        closeBtn.innerHTML = '<i class="fas fa-times"></i>';
+        closeBtn.addEventListener('click', () => list.classList.remove('visible'));
+        list.appendChild(closeBtn);
+        document.body.appendChild(list);
+        return list;
+    }
+
+    // Редактирование видео
+    editVideo(url) {
+        const index = this.videoPlaylist.indexOf(url);
+        if (index === -1) return;
+        const newDescription = prompt('Введите новое описание:', this.videoDataStore[index].description);
+        if (newDescription !== null) {
+            this.videoDataStore[index].description = newDescription;
+            this.updateVideoCache(index);
+            document.querySelector(`.video-item [data-url="${url}"]`).parentElement.querySelector('span').textContent = newDescription || 'Без описания';
+            this.showNotification('Описание обновлено!');
+            if (this.currentVideoIndex === index) this.updateDescription();
+        }
+    }
+
+    // Удаление видео
+    async deleteVideo(url) {
+        const index = this.videoPlaylist.indexOf(url);
+        if (index === -1) return;
+        if (confirm('Удалить это видео?')) {
+            try {
+                const storageRef = storage.refFromURL(url);
+                await storageRef.delete();
+                const querySnapshot = await db.collection('publicVideos').where('url', '==', url).get();
+                querySnapshot.forEach(doc => doc.ref.delete());
+
+                this.videoPlaylist.splice(index, 1);
+                this.videoDataStore.splice(index, 1);
+                localStorage.removeItem(`videoData_${url}`);
+                document.querySelector(`.video-item [data-url="${url}"]`).parentElement.remove();
+                if (this.currentVideoIndex === index) {
+                    this.currentVideoIndex = Math.min(this.currentVideoIndex, this.videoPlaylist.length - 1);
+                    this.loadVideo();
+                }
+                this.showNotification('Видео удалено!');
+            } catch (error) {
+                console.error('Ошибка удаления видео:', error);
+                this.showNotification('Ошибка при удалении видео!');
+            }
+        }
+    }
+
+    // Показать список управления видео
+    showVideoManagementList() {
+        const list = document.getElementById('videoManagementList');
+        list.classList.toggle('visible');
+    }
+
+    // Скрыть список управления при клике вне
+    hideManagementListOnClickOutside(e) {
+        const list = document.getElementById('videoManagementList');
+        if (list && list.classList.contains('visible') && !list.contains(e.target) && e.target !== this.userAvatar) {
+            list.classList.remove('visible');
+        }
+    }
+
+    // Обновление счётчиков
+    updateCounters() {
+        const videoData = this.videoDataStore[this.currentVideoIndex];
+        if (this.viewCountEl) this.viewCountEl.textContent = videoData.views.size;
+        if (this.likeCountEl) this.likeCountEl.textContent = videoData.likes;
+        if (this.dislikeCountEl) this.dislikeCountEl.textContent = videoData.dislikes;
+        if (this.commentCountEl) this.commentCountEl.textContent = videoData.comments.length;
+        if (this.shareCountEl) this.shareCountEl.textContent = videoData.shares;
+        this.updateRating();
+    }
+
+    // Расчёт рейтинга видео
+    calculateVideoScore(videoData, duration) {
+        const avgViewTimePerView = videoData.viewTime / (videoData.views.size || 1);
+        let viewTimeRatio = avgViewTimePerView / duration;
+        if (viewTimeRatio > 1) viewTimeRatio = 1 + (videoData.replays / (videoData.views.size || 1));
+        const rawScore = (videoData.likes * 5.0) + (videoData.comments.length * 10.0) + (videoData.shares * 15.0) + (videoData.viewTime * 0.1) + (videoData.replays * 20.0) * (1 + viewTimeRatio);
+        const maxPossibleScore = 50;
+        const normalizedScore = Math.max(0, Math.min(5, (rawScore / maxPossibleScore) * 5));
+        return normalizedScore;
+    }
+
+    // Обновление рейтинга
+    updateRating() {
+        const videoData = this.videoDataStore[this.currentVideoIndex];
+        const duration = videoData.duration || 300;
+        const score = this.calculateVideoScore(videoData, duration);
+        const fullStars = Math.floor(score);
+        const halfStar = score % 1 >= 0.5 ? 1 : 0;
+        const emptyStars = Math.max(0, 5 - fullStars - halfStar);
+        if (this.ratingEl) this.ratingEl.innerHTML = '★'.repeat(fullStars) + (halfStar ? '☆' : '') + '☆'.repeat(emptyStars);
+    }
+
+    // Рекомендация следующего видео
+    recommendNextVideo() {
+        const scores = this.videoPlaylist.map((src, index) => {
+            const data = this.videoDataStore[index];
+            const duration = data.duration || 300;
+            return { index, score: this.calculateVideoScore(data, duration) };
+        });
+        scores.sort((a, b) => b.score - a.score);
+        const nextVideo = scores.find(item => item.index !== this.currentVideoIndex) || scores[0];
+        this.currentVideoIndex = nextVideo.index;
+    }
+
+    // Предзагрузка следующего видео
+    preloadNextVideo() {
+        this.cleanPreloadedVideos();
+        const nextIndex = (this.currentVideoIndex + 1) % this.videoPlaylist.length;
+        if (!this.preloadedVideos[nextIndex]) {
+            const preloadVideo = document.createElement('video');
+            preloadVideo.src = this.videoPlaylist[nextIndex];
+            preloadVideo.preload = 'auto';
+            this.preloadedVideos[nextIndex] = preloadVideo;
+        }
+        const prevIndex = (this.currentVideoIndex - 1 + this.videoPlaylist.length) % this.videoPlaylist.length;
+        if (!this.preloadedVideos[prevIndex]) {
+            const preloadVideo = document.createElement('video');
+            preloadVideo.src = this.videoPlaylist[prevIndex];
+            preloadVideo.preload = 'auto';
+            this.preloadedVideos[prevIndex] = preloadVideo;
+        }
+    }
+
+    // Очистка предзагруженных видео
+    cleanPreloadedVideos() {
+        const keys = Object.keys(this.preloadedVideos).map(Number);
+        if (keys.length <= this.MAX_PRELOAD_SIZE) return;
+
+        const current = this.currentVideoIndex;
+        const prev = (current - 1 + this.videoPlaylist.length) % this.videoPlaylist.length;
+        const next = (current + 1) % this.videoPlaylist.length;
+
+        for (let key of keys) {
+            if (key !== current && key !== prev && key !== next) {
+                const videoEl = this.preloadedVideos[key];
+                if (videoEl && videoEl.src) URL.revokeObjectURL(videoEl.src);
+                delete this.preloadedVideos[key];
+            }
+        }
+    }
+
+    // Очистка плейлиста
+    cleanVideoPlaylist() {
+        if (this.videoPlaylist.length > this.MAX_PLAYLIST_SIZE) {
+            const removeCount = this.videoPlaylist.length - this.MAX_PLAYLIST_SIZE;
+            for (let i = 0; i < removeCount; i++) {
+                const url = this.videoPlaylist[i];
+                if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+                localStorage.removeItem(`videoData_${url}`);
+            }
+            this.videoPlaylist.splice(0, removeCount);
+            this.videoDataStore.splice(0, removeCount);
+            this.currentVideoIndex -= removeCount;
+            if (this.currentVideoIndex < 0) this.currentVideoIndex = 0;
+        }
+    }
+
+    // Обновление кэша видео
+    async updateVideoCache(index) {
+        const videoData = this.videoDataStore[index];
+        const url = this.videoPlaylist[index];
+        const cacheData = {
+            duration: videoData.duration,
+            lastPosition: videoData.lastPosition,
+            userLikes: Array.from(videoData.userLikes),
+            userDislikes: Array.from(videoData.userDislikes),
+            comments: videoData.comments,
+            chatMessages: videoData.chatMessages,
+            likes: videoData.likes,
+            dislikes: videoData.dislikes,
+            shares: videoData.shares,
+            viewTime: videoData.viewTime,
+            replays: videoData.replays,
+            views: Array.from(videoData.views),
+            description: videoData.description
+        };
+        localStorage.setItem(`videoData_${url}`, JSON.stringify(cacheData));
+
+        try {
+            const querySnapshot = await db.collection('publicVideos').where('url', '==', url).get();
+            if (!querySnapshot.empty) {
+                querySnapshot.forEach(doc => {
+                    doc.ref.update(cacheData);
+                });
+            }
+        } catch (error) {
+            console.error('Ошибка обновления Firestore:', error);
+        }
+    }
+
+    // Инициализация темы
+    initializeTheme() {
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        if (savedTheme === 'dark') {
+            document.body.classList.add('dark');
+            this.themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+        } else {
+            document.body.classList.remove('dark');
+            this.themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
+        }
+    }
+
+    // Переключение темы
+    toggleTheme() {
+        if (document.body.classList.contains('dark')) {
+            document.body.classList.remove('dark');
+            this.themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
+            localStorage.setItem('theme', 'light');
+        } else {
+            document.body.classList.add('dark');
+            this.themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+            localStorage.setItem('theme', 'dark');
+        }
+    }
+
+    // Инициализация подсказок
+    initializeTooltips() {
+        const tooltips = document.querySelectorAll('.tooltip');
+        const isFirstVisit = !localStorage.getItem('hasSeenTooltips');
+        if (isFirstVisit) {
+            tooltips.forEach(tooltip => {
+                tooltip.classList.add('visible');
+                setTimeout(() => tooltip.classList.remove('visible'), 5000);
+            });
+            localStorage.setItem('hasSeenTooltips', 'true');
+        }
+    }
+
+    // Показ уведомления
+    showNotification(message) {
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed; top: 10%; left: 50%; transform: translateX(-50%);
+            background: var(--notification-bg); color: var(--notification-text);
+            padding: 10px 20px; border-radius: 5px; z-index: 1000;
+            opacity: 0; transition: opacity 0.3s ease;
+        `;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        setTimeout(() => notification.style.opacity = '1', 10);
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            setTimeout(() => document.body.removeChild(notification), 300);
+        }, 3000);
+    }
+
+    // Форматирование времени
+    formatTime(seconds) {
+        const minutes = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+
+    // Троттлинг функций
+    throttle(func, limit) {
+        let inThrottle;
+        return function (...args) {
+            if (!inThrottle) {
+                func.apply(this, args);
+                inThrottle = true;
+                setTimeout(() => inThrottle = false, limit);
+            }
+        };
+    }
+
+    // Переключение воспроизведения
+    toggleVideoPlayback() {
+        if (this.video.paused) {
+            this.video.play().catch(err => console.error('Play error:', err));
+        } else {
+            this.video.pause();
+        }
+    }
+
+    // Обработка реакций
+    handleReaction(type, e) {
+        e.stopPropagation();
+        if (!this.userId) return;
+        const videoData = this.videoDataStore[this.currentVideoIndex];
+        if (type === 'like') {
+            if (videoData.userLikes.has(this.userId)) {
+                videoData.userLikes.delete(this.userId);
+                videoData.likes--;
+            } else {
+                if (videoData.userDislikes.has(this.userId)) {
+                    videoData.userDislikes.delete(this.userId);
+                    videoData.dislikes--;
+                }
+                videoData.userLikes.add(this.userId);
+                videoData.likes++;
+                this.showReaction('like');
+            }
+        } else if (type === 'dislike') {
+            if (videoData.userDislikes.has(this.userId)) {
+                videoData.userDislikes.delete(this.userId);
+                videoData.dislikes--;
+            } else {
+                if (videoData.userLikes.has(this.userId)) {
+                    videoData.userLikes.delete(this.userId);
+                    videoData.likes--;
+                }
+                videoData.userDislikes.add(this.userId);
+                videoData.dislikes++;
+                this.showReaction('dislike');
+            }
+        } else if (type === 'comment') {
+            this.commentsWindow.classList.toggle('visible');
+            if (this.commentsWindow.classList.contains('visible')) this.commentInput.focus();
+        } else if (type === 'share') {
+            this.shareModal.classList.add('visible');
+        }
+        this.updateCounters();
+        this.updateVideoCache(this.currentVideoIndex);
+    }
+
+    // Показ анимации реакции
+    showReaction(type) {
+        this.reactionAnimation.innerHTML = type === 'like' ? '<i class="fas fa-thumbs-up"></i>' : '<i class="fas fa-thumbs-down"></i>';
+        this.reactionAnimation.classList.add('show');
+        setTimeout(() => this.reactionAnimation.classList.remove('show'), 2000);
+    }
+
+    // Переключение подменю
+    toggleSubmenu(e) {
+        e.stopPropagation();
+        this.isSubmenuOpen = !this.isSubmenuOpen;
+        this.submenuUpload.classList.toggle('active', this.isSubmenuOpen);
+        this.submenuChat.classList.toggle('active', this.isSubmenuOpen);
+    }
+
+    // Переключение видимости панели реакций
+    toggleReactionBarVisibility(e) {
+        e.stopPropagation();
+        if (this.reactionBar.classList.contains('visible')) {
+            this.reactionBar.classList.remove('visible');
+            this.toggleReactionBar.classList.remove('active');
+            this.toggleReactionBar.innerHTML = '<i class="fas fa-arrow-right"></i>';
+        } else {
+            this.reactionBar.classList.add('visible');
+            this.toggleReactionBar.classList.add('active');
+            this.toggleReactionBar.innerHTML = '<i class="fas fa-arrow-left"></i>';
+            setTimeout(() => {
+                if (this.reactionBar.classList.contains('visible')) {
+                    this.reactionBar.classList.remove('visible');
+                    this.toggleReactionBar.classList.remove('active');
+                    this.toggleReactionBar.innerHTML = '<i class="fas fa-arrow-right"></i>';
+                }
+            }, 15000);
+        }
+    }
+
+    // Скачивание текущего видео
+    async downloadCurrentVideo(e) {
+        e.stopPropagation();
+        const videoUrl = this.videoPlaylist[this.currentVideoIndex];
+        if (!videoUrl) {
+            this.showNotification('Нет видео для загрузки!');
+            return;
+        }
+
+        this.uploadBtn.classList.add('downloading');
+        this.uploadBtn.style.setProperty('--progress', '0%');
+
+        try {
+            const response = await fetch(videoUrl);
+            const total = Number(response.headers.get('content-length'));
+            let loaded = 0;
+
+            const reader = response.body.getReader();
+            const stream = new ReadableStream({
+                start(controller) {
+                    function push() {
+                        reader.read().then(({ done, value }) => {
+                            if (done) {
+                                controller.close();
+                                return;
+                            }
+                            loaded += value.length;
+                            const progress = total ? (loaded / total) * 100 : this.simulateProgress();
+                            this.uploadBtn.style.setProperty('--progress', `${progress}%`);
+                            controller.enqueue(value);
+                            push();
+                        });
+                    }
+                    push();
+                }
+            });
+
+            const blob = await new Response(stream).blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `video_${Date.now()}.mp4`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            setTimeout(() => {
+                this.uploadBtn.classList.remove('downloading');
+                this.uploadBtn.style.setProperty('--progress', '0%');
+            }, 500);
+        } catch (err) {
+            console.error('Ошибка загрузки:', err);
+            this.showNotification('Не удалось скачать видео!');
+            this.uploadBtn.classList.remove('downloading');
+            this.uploadBtn.style.setProperty('--progress', '0%');
+        }
+    }
+
+    simulateProgress() {
+        let progress = 0;
+        const interval = setInterval(() => {
+            progress += 10;
+            if (progress >= 100) clearInterval(interval);
+            this.uploadBtn.style.setProperty('--progress', `${progress}%`);
+        }, 200);
+        return progress;
+    }
+
+    // Начало перетаскивания
+    startDragging(e) {
+        e.preventDefault();
+        let startY = e.type === 'mousedown' ? e.clientY : e.touches[0].clientY;
+        let isDragging = true;
+
+        const onMove = (e) => {
+            if (!isDragging) return;
+            const currentY = e.type === 'mousemove' ? e.clientY : e.touches[0].clientY;
+            const deltaY = currentY - startY;
+            if (deltaY > 50) {
+                this.commentsWindow.classList.remove('visible');
+                isDragging = false;
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('touchmove', onMove);
+            }
+        };
+
+        const onEnd = () => {
+            isDragging = false;
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('touchmove', onMove);
+            document.removeEventListener('mouseup', onEnd);
+            document.removeEventListener('touchend', onEnd);
+        };
+
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('touchmove', onMove, { passive: false });
+        document.addEventListener('mouseup', onEnd);
+        document.addEventListener('touchend', onEnd);
+    }
+
+    // Обработка подменю загрузки
+    handleSubmenuUpload(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        this.videoUpload.click();
+        this.toggleSubmenu();
+    }
+
+    // Переключение полноэкранного режима
+    toggleFullscreen(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        if (this.tg) {
+            if (this.tg.requestFullscreen) {
+                this.tg.requestFullscreen();
+                document.body.classList.add('telegram-fullscreen');
+            } else {
+                this.tg.expand();
+                this.showNotification('Полноэкранный режим не доступен в этой версии Telegram');
+            }
+        } else {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => console.error('Ошибка:', err));
+            } else {
+                document.exitFullscreen().catch(err => console.error('Ошибка:', err));
+                document.body.classList.remove('telegram-fullscreen');
+            }
+        }
+    }
+}
+
+// Запуск приложения
+document.addEventListener('DOMContentLoaded', async () => {
+    const videoManager = new VideoManager();
+    await videoManager.init();
 });
