@@ -874,7 +874,7 @@ body.dark .tooltip {
 
 #videoDescriptionDisplay {
     position: absolute;
-    bottom: 10vh; /* Спускаем ниже */
+    bottom: 13vh; /* Спускаем ниже */
     left: 2vw;
     color: #fff;
     padding: 10px;
@@ -1396,4 +1396,23 @@ body.telegram-fullscreen {
     background: rgba(0, 0, 0, 0.3); /* Прозрачность */
     z-index: 0; /* Самый нижний слой */
     pointer-events: none; /* Не мешает кликам */
+}
+
+#rating, #viewCount {
+    position: absolute;
+    top: 2vh; /* Обычное положение */
+    color: #fff;
+    z-index: 10;
+}
+
+@media (fullscreen) {
+    #rating, #viewCount {
+        top: 5vh; /* Отступ сверху в полноэкранном режиме */
+    }
+}
+
+/* Для Telegram Web App, если статус-бар остаётся видимым */
+.telegram-fullscreen #rating,
+.telegram-fullscreen #viewCount {
+    top: 5vh; /* Учитываем высоту статус-бара */
 }
