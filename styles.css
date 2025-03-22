@@ -1203,7 +1203,7 @@ body:not(.dark) #videoDescriptionDisplay {
     cursor: pointer;
     transition: transform 0.2s ease;
     pointer-events: auto !important;
-    z-index: 1000 !important;
+    z-index: 9999 !important;
 }
 }
 
