@@ -27,7 +27,6 @@ class VideoManager {
         this.uploadedFileUrl = null;
         this.tg = window.Telegram?.WebApp;
 
-        // Инициализация Telegram Web App
         if (this.tg) {
             this.tg.ready();
             console.log('Telegram Web App инициализирован, userId:', this.tg.initDataUnsafe?.user?.id);
@@ -38,7 +37,6 @@ class VideoManager {
         this.channels = JSON.parse(localStorage.getItem('channels')) || {};
     }
 
-    // Инициализация плеера
     async init() {
         this.bindElements();
         this.bindEvents();
@@ -49,7 +47,6 @@ class VideoManager {
         }
     }
 
-    // Привязка элементов DOM
     bindElements() {
         this.authScreen = document.getElementById('authScreen');
         this.playerContainer = document.getElementById('playerContainer');
@@ -101,7 +98,6 @@ class VideoManager {
         document.body.appendChild(this.videoUpload);
     }
 
-    // Привязка событий
     bindEvents() {
         this.authBtn.addEventListener('click', () => this.handleAuth());
         if (this.registerChannelBtn) this.bindRegisterChannelBtn();
@@ -137,7 +133,6 @@ class VideoManager {
         document.addEventListener('click', (e) => this.hideManagementListOnClickOutside(e));
     }
 
-    // Загрузка начальных видео из Firestore
     async loadInitialVideos() {
         try {
             const snapshot = await db.collection('publicVideos').orderBy('timestamp', 'desc').limit(10).get();
@@ -188,12 +183,11 @@ class VideoManager {
             }
             this.loadVideo();
         } catch (error) {
-            console.error('Ошибка загрузки видео из Firestore:', error);
-            this.showNotification('Ошибка загрузки видео!');
+            console.error('Ошибка загрузки видео:', error);
+            this.showNotification(`Не удалось загрузить видео: ${error.message}`);
         }
     }
 
-    // Авторизация
     handleAuth() {
         if (this.tg?.initDataUnsafe?.user) {
             this.userId = this.tg.initDataUnsafe.user.id;
@@ -205,19 +199,16 @@ class VideoManager {
         }
     }
 
-    // Показать плеер
     showPlayer() {
         this.authScreen.style.display = 'none';
         this.playerContainer.style.display = 'flex';
         this.initializePlayer();
     }
 
-    // Привязка кнопки регистрации канала
     bindRegisterChannelBtn() {
         this.registerChannelBtn.addEventListener('click', () => this.registerChannel());
     }
 
-    // Привязка аватара пользователя
     bindUserAvatar() {
         this.userAvatar.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -270,7 +261,6 @@ class VideoManager {
         this.userAvatar.addEventListener('touchmove', stopHold, { passive: false });
     }
 
-    // Регистрация канала
     registerChannel() {
         if (!this.tg?.initDataUnsafe?.user && !this.userId) {
             this.showNotification('Пожалуйста, войдите через Telegram.');
@@ -298,7 +288,6 @@ class VideoManager {
         }
     }
 
-    // Инициализация плеера
     initializePlayer() {
         this.isSubmenuOpen = false;
         this.isProgressBarActivated = false;
@@ -316,7 +305,6 @@ class VideoManager {
         this.initializeTooltips();
     }
 
-    // Обработка загрузки метаданных видео
     handleLoadedMetadata() {
         this.video.muted = true;
         this.video.play().then(() => {
@@ -331,7 +319,6 @@ class VideoManager {
         this.updateRating();
     }
 
-    // Обработка воспроизведения
     handlePlay() {
         const videoData = this.videoDataStore[this.currentVideoIndex];
         if (!this.hasViewed && this.userId) {
@@ -345,7 +332,6 @@ class VideoManager {
         this.preloadNextVideo();
     }
 
-    // Обработка паузы
     handlePause() {
         if (!this.isProgressBarActivated) {
             this.isProgressBarActivated = true;
@@ -355,7 +341,6 @@ class VideoManager {
         this.updateVideoCache(this.currentVideoIndex);
     }
 
-    // Обработка окончания видео
     handleEnded() {
         const videoData = this.videoDataStore[this.currentVideoIndex];
         if (this.video.currentTime >= this.video.duration * 0.9) videoData.replays++;
@@ -364,7 +349,6 @@ class VideoManager {
         this.playNextVideo();
     }
 
-    // Обработка обновления времени
     handleTimeUpdate() {
         const videoData = this.videoDataStore[this.currentVideoIndex];
         videoData.viewTime += this.video.currentTime - this.lastTime;
@@ -375,14 +359,12 @@ class VideoManager {
         this.updateRating();
     }
 
-    // Обработка изменения прогресса
     handleProgressInput(e) {
         this.video.currentTime = e.target.value;
         this.videoDataStore[this.currentVideoIndex].lastPosition = this.video.currentTime;
         this.updateVideoCache(this.currentVideoIndex);
     }
 
-    // Настройка событий свайпа и мыши
     setupSwipeAndMouseEvents() {
         let startX = 0, startY = 0, endX = 0, endY = 0;
         let touchTimeout;
@@ -519,21 +501,18 @@ class VideoManager {
         setTimeout(() => reaction.remove(), 1500);
     }
 
-    // Воспроизведение следующего видео
     playNextVideo() {
         this.recommendNextVideo();
         this.loadVideo('left');
         this.hasViewed = false;
     }
 
-    // Воспроизведение предыдущего видео
     playPreviousVideo() {
         this.currentVideoIndex = (this.currentVideoIndex - 1 + this.videoPlaylist.length) % this.videoPlaylist.length;
         this.loadVideo('right');
         this.hasViewed = false;
     }
 
-    // Загрузка видео
     loadVideo(direction = 'left') {
         const fadeOutClass = direction === 'left' ? 'fade-out-left' : 'fade-out-right';
         this.video.classList.remove('fade-in');
@@ -542,7 +521,14 @@ class VideoManager {
         setTimeout(() => {
             this.videoSource.src = this.videoPlaylist[this.currentVideoIndex];
             this.video.load();
+            const timeout = setTimeout(() => {
+                if (!this.video.readyState) {
+                    this.showNotification('Ошибка загрузки видео!');
+                    this.playNextVideo();
+                }
+            }, 5000);
             this.video.addEventListener('canplay', () => {
+                clearTimeout(timeout);
                 const lastPosition = this.videoDataStore[this.currentVideoIndex].lastPosition;
                 this.video.classList.remove('fade-out-left', 'fade-out-right');
                 this.video.classList.add('fade-in');
@@ -560,7 +546,6 @@ class VideoManager {
         }, 300);
     }
 
-    // Показать запрос на продолжение
     showResumePrompt(lastPosition) {
         const resumePrompt = document.createElement('div');
         resumePrompt.style.cssText = `
@@ -588,26 +573,25 @@ class VideoManager {
         });
     }
 
-    // Добавление комментария
-    addComment() {
+    async addComment() {
         const videoData = this.videoDataStore[this.currentVideoIndex];
         const text = this.commentInput.value.trim();
         if (text && this.userId) {
-            videoData.comments.push({
+            const newComment = {
                 userId: this.userId,
                 text: text,
                 replyTo: this.commentInput.dataset.replyTo || null
-            });
+            };
+            videoData.comments.push(newComment);
             this.commentInput.value = '';
             this.commentInput.dataset.replyTo = '';
             this.commentInput.placeholder = 'Введите комментарий';
             this.updateComments();
             this.updateCounters();
-            this.updateVideoCache(this.currentVideoIndex);
+            await this.updateVideoCache(this.currentVideoIndex);
         }
     }
 
-    // Обновление комментариев
     updateComments() {
         const videoData = this.videoDataStore[this.currentVideoIndex];
         this.commentsList.innerHTML = '';
@@ -667,7 +651,6 @@ class VideoManager {
         }
     }
 
-    // Обновление описания
     updateDescription() {
         let descriptionEl = document.getElementById('videoDescriptionDisplay');
         if (!descriptionEl) {
@@ -679,7 +662,6 @@ class VideoManager {
         descriptionEl.textContent = this.videoDataStore[this.currentVideoIndex].description || 'Описание отсутствует';
     }
 
-    // Обновление чата
     updateChat() {
         const videoData = this.videoDataStore[this.currentVideoIndex];
         this.chatMessages.innerHTML = '';
@@ -692,7 +674,6 @@ class VideoManager {
         this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
     }
 
-    // Отправка сообщения в чат
     sendChat() {
         const videoData = this.videoDataStore[this.currentVideoIndex];
         const text = this.chatInput.value.trim();
@@ -709,7 +690,6 @@ class VideoManager {
         }
     }
 
-    // Обработка подменю чата
     handleSubmenuChat(e) {
         e.stopPropagation();
         this.chatModal.classList.add('visible');
@@ -717,7 +697,6 @@ class VideoManager {
         this.toggleSubmenu();
     }
 
-    // Поделиться через Telegram
     shareViaTelegram() {
         const videoUrl = this.videoPlaylist[this.currentVideoIndex];
         const description = this.videoDataStore[this.currentVideoIndex].description || 'Смотри это крутое видео!';
@@ -738,7 +717,6 @@ class VideoManager {
         this.updateVideoCache(this.currentVideoIndex);
     }
 
-    // Копирование ссылки
     copyVideoLink() {
         const videoUrl = this.videoPlaylist[this.currentVideoIndex];
         navigator.clipboard.writeText(videoUrl).then(() => {
@@ -750,7 +728,6 @@ class VideoManager {
         });
     }
 
-    // Загрузка видео
     async handleVideoUpload(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -773,22 +750,29 @@ class VideoManager {
         this.uploadPreview.style.display = 'none';
         this.publishBtn.disabled = true;
 
+        console.log('Файл выбран:', file.name, file.size);
+        console.log('Модалка открыта');
+
         try {
             const storageRef = storage.ref(`videos/${this.userId}/${Date.now()}_${file.name}`);
+            console.log('Storage ref:', storageRef.fullPath);
             const uploadTask = storageRef.put(file);
 
             uploadTask.on('state_changed',
                 (snapshot) => {
+                    console.log('Прогресс:', snapshot.bytesTransferred, '/', snapshot.totalBytes);
                     const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
                     this.uploadProgress.style.width = `${progress}%`;
                 },
                 (error) => {
                     console.error('Ошибка загрузки:', error);
-                    this.showNotification('Ошибка при загрузке видео!');
+                    this.showNotification(`Ошибка: ${error.message}`);
                     this.uploadModal.classList.remove('visible');
                 },
                 async () => {
+                    console.log('Загрузка завершена');
                     this.uploadedFileUrl = await uploadTask.snapshot.ref.getDownloadURL();
+                    console.log('URL:', this.uploadedFileUrl);
                     this.uploadPreview.src = this.uploadedFileUrl;
                     this.uploadPreview.style.display = 'block';
                     this.publishBtn.disabled = false;
@@ -814,12 +798,12 @@ class VideoManager {
                 }
             );
         } catch (error) {
-            console.error('Ошибка загрузки видео:', error);
-            this.showNotification('Ошибка загрузки видео!');
+            console.error('Общая ошибка:', error);
+            this.showNotification(`Ошибка: ${error.message}`);
+            this.uploadModal.classList.remove('visible');
         }
     }
 
-    // Публикация видео
     publishVideo() {
         if (!this.uploadedFileUrl) return;
 
@@ -860,13 +844,11 @@ class VideoManager {
         this.uploadedFileUrl = null;
     }
 
-    // Отмена загрузки
     cancelUpload() {
         this.uploadedFileUrl = null;
         this.uploadModal.classList.remove('visible');
     }
 
-    // Добавление видео в список управления
     addVideoToManagementList(url, description) {
         const managementList = document.getElementById('videoManagementList') || this.createManagementList();
         const videoItem = document.createElement('div');
@@ -882,7 +864,6 @@ class VideoManager {
         videoItem.querySelector('.delete-btn').addEventListener('click', () => this.deleteVideo(url));
     }
 
-    // Создание списка управления
     createManagementList() {
         const list = document.createElement('div');
         list.id = 'videoManagementList';
@@ -896,7 +877,6 @@ class VideoManager {
         return list;
     }
 
-    // Редактирование видео
     editVideo(url) {
         const index = this.videoPlaylist.indexOf(url);
         if (index === -1) return;
@@ -910,7 +890,6 @@ class VideoManager {
         }
     }
 
-    // Удаление видео
     async deleteVideo(url) {
         const index = this.videoPlaylist.indexOf(url);
         if (index === -1) return;
@@ -937,13 +916,11 @@ class VideoManager {
         }
     }
 
-    // Показать список управления видео
     showVideoManagementList() {
         const list = document.getElementById('videoManagementList');
         list.classList.toggle('visible');
     }
 
-    // Скрыть список управления при клике вне
     hideManagementListOnClickOutside(e) {
         const list = document.getElementById('videoManagementList');
         if (list && list.classList.contains('visible') && !list.contains(e.target) && e.target !== this.userAvatar) {
@@ -951,7 +928,6 @@ class VideoManager {
         }
     }
 
-    // Обновление счётчиков
     updateCounters() {
         const videoData = this.videoDataStore[this.currentVideoIndex];
         if (this.viewCountEl) this.viewCountEl.textContent = videoData.views.size;
@@ -962,7 +938,6 @@ class VideoManager {
         this.updateRating();
     }
 
-    // Расчёт рейтинга видео
     calculateVideoScore(videoData, duration) {
         const avgViewTimePerView = videoData.viewTime / (videoData.views.size || 1);
         let viewTimeRatio = avgViewTimePerView / duration;
@@ -973,7 +948,6 @@ class VideoManager {
         return normalizedScore;
     }
 
-    // Обновление рейтинга
     updateRating() {
         const videoData = this.videoDataStore[this.currentVideoIndex];
         const duration = videoData.duration || 300;
@@ -984,7 +958,6 @@ class VideoManager {
         if (this.ratingEl) this.ratingEl.innerHTML = '★'.repeat(fullStars) + (halfStar ? '☆' : '') + '☆'.repeat(emptyStars);
     }
 
-    // Рекомендация следующего видео
     recommendNextVideo() {
         const scores = this.videoPlaylist.map((src, index) => {
             const data = this.videoDataStore[index];
@@ -996,7 +969,6 @@ class VideoManager {
         this.currentVideoIndex = nextVideo.index;
     }
 
-    // Предзагрузка следующего видео
     preloadNextVideo() {
         this.cleanPreloadedVideos();
         const nextIndex = (this.currentVideoIndex + 1) % this.videoPlaylist.length;
@@ -1015,25 +987,18 @@ class VideoManager {
         }
     }
 
-    // Очистка предзагруженных видео
     cleanPreloadedVideos() {
         const keys = Object.keys(this.preloadedVideos).map(Number);
-        if (keys.length <= this.MAX_PRELOAD_SIZE) return;
-
-        const current = this.currentVideoIndex;
-        const prev = (current - 1 + this.videoPlaylist.length) % this.videoPlaylist.length;
-        const next = (current + 1) % this.videoPlaylist.length;
-
-        for (let key of keys) {
-            if (key !== current && key !== prev && key !== next) {
+        const keep = [this.currentVideoIndex, (this.currentVideoIndex + 1) % this.videoPlaylist.length, (this.currentVideoIndex - 1 + this.videoPlaylist.length) % this.videoPlaylist.length];
+        keys.forEach(key => {
+            if (!keep.includes(key)) {
                 const videoEl = this.preloadedVideos[key];
                 if (videoEl && videoEl.src) URL.revokeObjectURL(videoEl.src);
                 delete this.preloadedVideos[key];
             }
-        }
+        });
     }
 
-    // Очистка плейлиста
     cleanVideoPlaylist() {
         if (this.videoPlaylist.length > this.MAX_PLAYLIST_SIZE) {
             const removeCount = this.videoPlaylist.length - this.MAX_PLAYLIST_SIZE;
@@ -1049,7 +1014,6 @@ class VideoManager {
         }
     }
 
-    // Обновление кэша видео
     async updateVideoCache(index) {
         const videoData = this.videoDataStore[index];
         const url = this.videoPlaylist[index];
@@ -1076,13 +1040,17 @@ class VideoManager {
                 querySnapshot.forEach(doc => {
                     doc.ref.update(cacheData);
                 });
+                console.log('Данные сохранены в Firestore');
+            } else {
+                console.warn('Видео не найдено в Firestore, добавляем новое');
+                await db.collection('publicVideos').add(cacheData);
             }
         } catch (error) {
             console.error('Ошибка обновления Firestore:', error);
+            this.showNotification('Не удалось сохранить данные!');
         }
     }
 
-    // Инициализация темы
     initializeTheme() {
         const savedTheme = localStorage.getItem('theme') || 'dark';
         if (savedTheme === 'dark') {
@@ -1094,7 +1062,6 @@ class VideoManager {
         }
     }
 
-    // Переключение темы
     toggleTheme() {
         if (document.body.classList.contains('dark')) {
             document.body.classList.remove('dark');
@@ -1107,7 +1074,6 @@ class VideoManager {
         }
     }
 
-    // Инициализация подсказок
     initializeTooltips() {
         const tooltips = document.querySelectorAll('.tooltip');
         const isFirstVisit = !localStorage.getItem('hasSeenTooltips');
@@ -1120,7 +1086,6 @@ class VideoManager {
         }
     }
 
-    // Показ уведомления
     showNotification(message) {
         const notification = document.createElement('div');
         notification.style.cssText = `
@@ -1138,14 +1103,12 @@ class VideoManager {
         }, 3000);
     }
 
-    // Форматирование времени
     formatTime(seconds) {
         const minutes = Math.floor(seconds / 60);
         const secs = Math.floor(seconds % 60);
         return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
     }
 
-    // Троттлинг функций
     throttle(func, limit) {
         let inThrottle;
         return function (...args) {
@@ -1157,7 +1120,6 @@ class VideoManager {
         };
     }
 
-    // Переключение воспроизведения
     toggleVideoPlayback() {
         if (this.video.paused) {
             this.video.play().catch(err => console.error('Play error:', err));
@@ -1166,7 +1128,6 @@ class VideoManager {
         }
     }
 
-    // Обработка реакций
     handleReaction(type, e) {
         e.stopPropagation();
         if (!this.userId) return;
@@ -1207,14 +1168,12 @@ class VideoManager {
         this.updateVideoCache(this.currentVideoIndex);
     }
 
-    // Показ анимации реакции
     showReaction(type) {
         this.reactionAnimation.innerHTML = type === 'like' ? '<i class="fas fa-thumbs-up"></i>' : '<i class="fas fa-thumbs-down"></i>';
         this.reactionAnimation.classList.add('show');
         setTimeout(() => this.reactionAnimation.classList.remove('show'), 2000);
     }
 
-    // Переключение подменю
     toggleSubmenu(e) {
         e.stopPropagation();
         this.isSubmenuOpen = !this.isSubmenuOpen;
@@ -1222,7 +1181,6 @@ class VideoManager {
         this.submenuChat.classList.toggle('active', this.isSubmenuOpen);
     }
 
-    // Переключение видимости панели реакций
     toggleReactionBarVisibility(e) {
         e.stopPropagation();
         if (this.reactionBar.classList.contains('visible')) {
@@ -1243,7 +1201,6 @@ class VideoManager {
         }
     }
 
-    // Скачивание текущего видео
     async downloadCurrentVideo(e) {
         e.stopPropagation();
         const videoUrl = this.videoPlaylist[this.currentVideoIndex];
@@ -1312,7 +1269,6 @@ class VideoManager {
         return progress;
     }
 
-    // Начало перетаскивания
     startDragging(e) {
         e.preventDefault();
         let startY = e.type === 'mousedown' ? e.clientY : e.touches[0].clientY;
@@ -1344,7 +1300,6 @@ class VideoManager {
         document.addEventListener('touchend', onEnd);
     }
 
-    // Обработка подменю загрузки
     handleSubmenuUpload(e) {
         e.stopPropagation();
         e.preventDefault();
@@ -1352,7 +1307,6 @@ class VideoManager {
         this.toggleSubmenu();
     }
 
-    // Переключение полноэкранного режима
     toggleFullscreen(e) {
         e.stopPropagation();
         e.preventDefault();
@@ -1375,7 +1329,6 @@ class VideoManager {
     }
 }
 
-// Запуск приложения
 document.addEventListener('DOMContentLoaded', async () => {
     const videoManager = new VideoManager();
     await videoManager.init();
