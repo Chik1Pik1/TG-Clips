@@ -1202,6 +1202,9 @@ body:not(.dark) #videoDescriptionDisplay {
     border-radius: 50%;
     cursor: pointer;
     transition: transform 0.2s ease;
+    pointer-events: auto !important;
+    z-index: 1000 !important;
+}
 }
 
 #userAvatar:hover {
