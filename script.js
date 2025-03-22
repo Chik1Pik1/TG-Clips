@@ -1,4 +1,4 @@
-// Firebase Config
+// Firebase Config (объявляем только один раз)
 const firebaseConfig = {
   apiKey: "AIzaSyCun4sBfsWl6Qqu4C-Qs8XB9fWqoFda8ck",
   authDomain: "tg-clips.firebaseapp.com",
@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 console.error('registerChannelBtn так и не найден');
             }
-        }, 1000); // Ждем 1 секунду для динамической загрузки
+        }, 1000);
     } else {
         bindRegisterChannelBtn(registerChannelBtn);
     }
@@ -187,9 +187,8 @@ document.addEventListener('DOMContentLoaded', () => {
     videoUpload.style.display = 'none';
     document.body.appendChild(videoUpload);
 
-    // Автоматический вход, если Telegram SDK предоставил данные
     if (tg?.initDataUnsafe?.user) {
-        userId = tg.initDataUnsafe.user.id; // Обновляем глобальный userId
+        userId = tg.initDataUnsafe.user.id;
         showPlayer();
     } else {
         console.log('No Telegram user detected on load');
@@ -203,6 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function bindUserAvatar(avatar) {
+        console.log('Привязываем обработчики для userAvatar:', avatar);
         avatar.addEventListener('click', (e) => {
             e.stopPropagation();
             console.log('Клик по userAvatar, userId:', userId);
@@ -229,11 +229,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (holdTimeout || isHolding) return;
             isHolding = true;
             avatar.classList.add('holding');
+            console.log('Начато удержание userAvatar');
             holdTimeout = setTimeout(() => {
                 showVideoManagementList();
                 holdTimeout = null;
                 isHolding = false;
                 avatar.classList.remove('holding');
+                console.log('Удержание завершено, показан список');
             }, holdDuration);
         }
 
@@ -241,6 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (holdTimeout) {
                 clearTimeout(holdTimeout);
                 holdTimeout = null;
+                console.log('Удержание прервано');
             }
             isHolding = false;
             avatar.classList.remove('holding');
@@ -264,11 +267,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function registerChannel() {
         console.log('registerChannel вызвана, userId:', userId);
         if (!tg?.initDataUnsafe?.user && !userId) {
-            if (tg) {
-                tg.showAlert('Пожалуйста, войдите через Telegram, чтобы зарегистрировать канал.');
-            } else {
-                alert('Пожалуйста, войдите через Telegram, чтобы зарегистрировать канал.');
-            }
+            // Проверяем версию Telegram и используем alert вместо showAlert
+            alert('Пожалуйста, войдите через Telegram, чтобы зарегистрировать канал.');
             return;
         }
 
@@ -282,25 +282,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        let channelLink;
-        if (tg?.showPopup) {
-            tg.showPopup({
-                title: 'Регистрация канала',
-                message: 'Введите ссылку на ваш Telegram-канал (например, https://t.me/yourchannel):',
-                buttons: [
-                    { id: 'submit', type: 'default', text: 'Отправить' },
-                    { id: 'cancel', type: 'cancel', text: 'Отмена' }
-                ]
-            }, (buttonId) => {
-                if (buttonId === 'submit') {
-                    channelLink = prompt('Введите ссылку на ваш Telegram-канал:');
-                    handleChannelLink(channelLink);
-                }
-            });
-        } else {
-            channelLink = prompt('Введите ссылку на ваш Telegram-канал (например, https://t.me/yourchannel):');
-            handleChannelLink(channelLink);
-        }
+        let channelLink = prompt('Введите ссылку на ваш Telegram-канал (например, https://t.me/yourchannel):');
+        handleChannelLink(channelLink);
     }
 
     function handleChannelLink(channelLink) {
@@ -308,11 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const isValidLink = channelLink.match(/^https:\/\/t\.me\/[a-zA-Z0-9_]+$/);
         if (!isValidLink) {
-            if (tg?.showAlert) {
-                tg.showAlert('Пожалуйста, введите корректную ссылку на Telegram-канал (https://t.me/...).');
-            } else {
-                alert('Пожалуйста, введите корректную ссылку на Telegram-канал (https://t.me/...).');
-            }
+            alert('Пожалуйста, введите корректную ссылку на Telegram-канал (https://t.me/...).');
             return;
         }
 
