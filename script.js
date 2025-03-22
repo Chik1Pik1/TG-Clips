@@ -1,12 +1,12 @@
-// Firebase Config (одно объявление)
+// Firebase Config
 const firebaseConfig = {
-  apiKey: "AIzaSyCun4sBfsWl6Qqu4C-Qs8XB9fWqoFda8ck",
-  authDomain: "tg-clips.firebaseapp.com",
-  projectId: "tg-clips",
-  storageBucket: "tg-clips.firebasestorage.app",
-  messagingSenderId: "68837002540",
-  appId: "1:68837002540:web:3215ed30dbf14db9ee3089",
-  measurementId: "G-7R1RSQ0S4P"
+    apiKey: "AIzaSyCun4sBfsWl6Qqu4C-Qs8XB9fWqoFda8ck",
+    authDomain: "tg-clips.firebaseapp.com",
+    projectId: "tg-clips",
+    storageBucket: "tg-clips.firebasestorage.app",
+    messagingSenderId: "68837002540",
+    appId: "1:68837002540:web:3215ed30dbf14db9ee3089",
+    measurementId: "G-7R1RSQ0S4P"
 };
 
 // Глобальные переменные для Firebase
@@ -21,18 +21,11 @@ document.addEventListener('DOMContentLoaded', () => {
         console.warn('Telegram Web App SDK не загружен. Работа в режиме браузера.');
     }
 
-    // Проверяем наличие элементов
     const authScreen = document.getElementById('authScreen');
     const playerContainer = document.getElementById('playerContainer');
     const authBtn = document.getElementById('authBtn');
     let registerChannelBtn = document.getElementById('registerChannelBtn');
     let userAvatar = document.getElementById('userAvatar');
-
-    console.log('authScreen:', authScreen);
-    console.log('playerContainer:', playerContainer);
-    console.log('authBtn:', authBtn);
-    console.log('registerChannelBtn:', registerChannelBtn);
-    console.log('userAvatar:', userAvatar);
 
     if (!authScreen || !playerContainer || !authBtn) {
         console.error('Критические элементы не найдены в DOM');
@@ -40,38 +33,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (!registerChannelBtn) {
-        console.warn('registerChannelBtn не найден сразу, ищем позже');
         setTimeout(() => {
             registerChannelBtn = document.getElementById('registerChannelBtn');
-            if (registerChannelBtn) {
-                console.log('registerChannelBtn найден позже:', registerChannelBtn);
-                bindRegisterChannelBtn(registerChannelBtn);
-            } else {
-                console.error('registerChannelBtn так и не найден');
-            }
+            if (registerChannelBtn) bindRegisterChannelBtn(registerChannelBtn);
         }, 1000);
     } else {
         bindRegisterChannelBtn(registerChannelBtn);
     }
 
     if (!userAvatar) {
-        console.warn('userAvatar не найден сразу, ищем позже');
         setTimeout(() => {
             userAvatar = document.getElementById('userAvatar');
-            if (userAvatar) {
-                console.log('userAvatar найден позже:', userAvatar);
-                bindUserAvatar(userAvatar);
-            } else {
-                console.error('userAvatar так и не найден');
-            }
+            if (userAvatar) bindUserAvatar(userAvatar);
         }, 1000);
     } else {
         bindUserAvatar(userAvatar);
     }
 
-    // Привязываем обработчик для authBtn
     authBtn.addEventListener('click', () => {
-        console.log('Клик по authBtn');
         if (tg?.initDataUnsafe?.user) {
             userId = tg.initDataUnsafe.user.id;
             showPlayer();
@@ -82,7 +61,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Инициализация Firebase
     try {
         firebase.initializeApp(firebaseConfig);
         db = firebase.firestore();
@@ -118,18 +96,13 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         if (cachedData) {
             const parsedData = JSON.parse(cachedData);
-            const fixedComments = (parsedData.comments || []).map(comment => ({
-                userId: comment.userId || 'unknown',
-                text: comment.text || '',
-                replyTo: comment.replyTo || null
-            }));
             return {
                 ...defaultData,
                 ...parsedData,
                 views: new Set(parsedData.views || []),
                 userLikes: new Set(parsedData.userLikes || []),
                 userDislikes: new Set(parsedData.userDislikes || []),
-                comments: fixedComments,
+                comments: [],
                 chatMessages: parsedData.chatMessages || [],
                 description: parsedData.description || ''
             };
@@ -195,22 +168,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (tg?.initDataUnsafe?.user) {
         userId = tg.initDataUnsafe.user.id;
         showPlayer();
-    } else {
-        console.log('No Telegram user detected on load');
     }
 
     function bindRegisterChannelBtn(btn) {
-        btn.addEventListener('click', () => {
-            console.log('Клик по registerChannelBtn, userId:', userId);
-            registerChannel();
-        });
+        btn.addEventListener('click', () => registerChannel());
     }
 
     function bindUserAvatar(avatar) {
-        console.log('Привязываем обработчики для userAvatar:', avatar);
         avatar.addEventListener('click', (e) => {
             e.stopPropagation();
-            console.log('Клик по userAvatar, userId:', userId);
             if (!isHolding) {
                 const channel = channels[userId];
                 if (channel && channel.link) {
@@ -234,13 +200,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (holdTimeout || isHolding) return;
             isHolding = true;
             avatar.classList.add('holding');
-            console.log('Начато удержание userAvatar');
             holdTimeout = setTimeout(() => {
                 showVideoManagementList();
                 holdTimeout = null;
                 isHolding = false;
                 avatar.classList.remove('holding');
-                console.log('Удержание завершено, показан список');
             }, holdDuration);
         }
 
@@ -248,7 +212,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (holdTimeout) {
                 clearTimeout(holdTimeout);
                 holdTimeout = null;
-                console.log('Удержание прервано');
             }
             isHolding = false;
             avatar.classList.remove('holding');
@@ -270,9 +233,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function registerChannel() {
-        console.log('registerChannel вызвана, userId:', userId);
         if (!tg?.initDataUnsafe?.user && !userId) {
-            alert('Пожалуйста, войдите через Telegram, чтобы зарегистрировать канал.');
+            alert('Пожалуйста, войдите через Telegram.');
             return;
         }
 
@@ -287,27 +249,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         let channelLink = prompt('Введите ссылку на ваш Telegram-канал (например, https://t.me/yourchannel):');
-        handleChannelLink(channelLink);
-    }
-
-    function handleChannelLink(channelLink) {
-        if (!channelLink) return;
-
-        const isValidLink = channelLink.match(/^https:\/\/t\.me\/[a-zA-Z0-9_]+$/);
-        if (!isValidLink) {
-            alert('Пожалуйста, введите корректную ссылку на Telegram-канал (https://t.me/...).');
-            return;
-        }
-
-        if (!channels[userId]) {
+        if (channelLink && channelLink.match(/^https:\/\/t\.me\/[a-zA-Z0-9_]+$/)) {
             channels[userId] = { videos: [], link: channelLink };
+            localStorage.setItem('channels', JSON.stringify(channels));
+            showNotification('Канал успешно зарегистрирован!');
+            if (authScreen.style.display !== 'none') showPlayer();
         } else {
-            channels[userId].link = channelLink;
-        }
-        localStorage.setItem('channels', JSON.stringify(channels));
-        showNotification('Канал успешно зарегистрирован!');
-        if (authScreen.style.display !== 'none') {
-            showPlayer();
+            alert('Введите корректную ссылку на Telegram-канал.');
         }
     }
 
@@ -322,7 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
         initializeTheme();
         initializeTooltips();
 
-        if (userAvatar && tg?.initDataUnsafe?.user && tg.initDataUnsafe.user.photo_url) {
+        if (userAvatar && tg?.initDataUnsafe?.user?.photo_url) {
             userAvatar.src = tg.initDataUnsafe.user.photo_url;
         } else if (userAvatar) {
             userAvatar.src = 'https://via.placeholder.com/40';
@@ -337,16 +285,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const fullscreenBtn = document.querySelector('.fullscreen-btn');
         if (fullscreenBtn) {
-          fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
-          fullscreenBtn.addEventListener('click', (e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              toggleFullscreen();
-          });
+            fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
+            fullscreenBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                toggleFullscreen();
+            });
         }
 
         reactionButtons.forEach(button => {
-            button.removeEventListener('click', handleReaction);
             button.addEventListener('click', (e) => {
                 e.stopPropagation();
                 handleReaction(button.dataset.type);
@@ -468,17 +415,13 @@ document.addEventListener('DOMContentLoaded', () => {
         dragHandle.addEventListener('mousedown', startDragging);
         dragHandle.addEventListener('touchstart', startDragging, { passive: false });
 
-        let isFullscreen = false;
-
         function toggleFullscreen() {
             let tg = window.Telegram?.WebApp;
             if (tg) {
                 if (tg.requestFullscreen) {
                     tg.requestFullscreen();
-                    console.log('Полноэкранный режим запрошен');
                     document.body.classList.add('telegram-fullscreen');
                 } else {
-                    console.warn('requestFullscreen не поддерживается');
                     tg.expand();
                     showNotification('Полноэкранный режим не доступен в этой версии Telegram');
                 }
@@ -493,7 +436,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         function downloadCurrentVideo() {
-            const videoUrl = video.src;
+            const videoUrl = videoPlaylist[currentVideoIndex];
             if (!videoUrl) {
                 alert('Нет видео для загрузки!');
                 return;
@@ -556,9 +499,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let progress = 0;
             const interval = setInterval(() => {
                 progress += 10;
-                if (progress >= 100) {
-                    clearInterval(interval);
-                }
+                if (progress >= 100) clearInterval(interval);
                 uploadBtn.style.setProperty('--progress', `${progress}%`);
             }, 200);
             return progress;
@@ -662,9 +603,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (commentsWindow.classList.contains('visible')) commentInput.focus();
             } else if (type === 'share') {
                 shareModal.classList.add('visible');
-                videoData.shares++;
-                updateCounters();
-                updateVideoCache(currentVideoIndex);
             }
             updateCounters();
             updateVideoCache(currentVideoIndex);
@@ -845,7 +783,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }, { once: true });
                 updateCounters();
                 updateComments();
-                console.log('Comments updated for video:', currentVideoIndex, videoDataStore[currentVideoIndex].comments);
                 updateRating();
                 updateDescription();
                 preloadNextVideo();
@@ -861,8 +798,8 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             resumePrompt.innerHTML = `
                 <p>Продолжить с ${formatTime(lastPosition)}?</p>
-                <button id="resumeYes" style="margin: 5px; padding: 5px 15px; background: var(--button-bg); color: #fff; border: none; border-radius: 5px; cursor: pointer;">Да</button>
-                <button id="resumeNo" style="margin: 5px; padding: 5px 15px; background: var(--button-bg); color: #fff; border: none; border-radius: 5px; cursor: pointer;">Нет</button>
+                <button id="resumeYes">Да</button>
+                <button id="resumeNo">Нет</button>
             `;
             document.body.appendChild(resumePrompt);
 
@@ -894,13 +831,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateComments();
                 updateCounters();
                 updateVideoCache(currentVideoIndex);
-                console.log('Comment added:', videoData.comments);
             }
         }
 
         function updateComments() {
             const videoData = videoDataStore[currentVideoIndex];
-            console.log('Updating comments:', videoData.comments);
             commentsList.innerHTML = '';
             videoData.comments.forEach((comment, idx) => {
                 const userPhoto = (tg?.initDataUnsafe?.user?.id === comment.userId && tg?.initDataUnsafe?.user?.photo_url) 
@@ -1006,13 +941,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function shareViaTelegram() {
             const videoUrl = videoPlaylist[currentVideoIndex];
-            const text = `Смотри это крутое видео: ${videoUrl}`;
+            const description = videoDataStore[currentVideoIndex].description || 'Смотри это крутое видео!';
+            const text = `${description}\n${videoUrl}`;
             if (tg?.isVersionGte('6.0')) {
-                tg.sendData(JSON.stringify({ type: 'share', text }));
+                tg.openShareUrl(`https://t.me/share/url?url=${encodeURIComponent(videoUrl)}&text=${encodeURIComponent(description)}`);
             } else {
-                alert('Имитация: Отправлено в Telegram: ' + text);
+                navigator.clipboard.writeText(text).then(() => {
+                    showNotification('Ссылка скопирована! Вставьте её в Telegram.');
+                }).catch(err => {
+                    console.error('Ошибка копирования:', err);
+                    showNotification('Не удалось скопировать ссылку');
+                });
             }
             shareModal.classList.remove('visible');
+            videoDataStore[currentVideoIndex].shares++;
+            updateCounters();
+            updateVideoCache(currentVideoIndex);
         }
 
         function copyVideoLink() {
@@ -1043,36 +987,42 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                const buffer = event.target.result;
-                const uint = new Uint8Array(buffer.slice(0, 4));
-                const isSuspicious = uint.every(byte => byte === 0);
-                if (isSuspicious) {
-                    showNotification('Файл подозрительный и не может быть загружен.');
-                    return;
-                }
+            uploadModal.classList.add('visible');
+            uploadProgress.style.width = '0%';
+            uploadPreview.style.display = 'none';
+            publishBtn.disabled = true;
 
-                uploadModal.classList.add('visible');
-                uploadProgress.style.width = '0%';
-                uploadPreview.style.display = 'none';
-                publishBtn.disabled = true;
+            const storageRef = storage.ref(`videos/${userId}/${Date.now()}_${file.name}`);
+            const uploadTask = storageRef.put(file);
 
-                let progress = 0;
-                const progressInterval = setInterval(() => {
-                    progress += 10;
+            uploadTask.on('state_changed',
+                (snapshot) => {
+                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
                     uploadProgress.style.width = `${progress}%`;
-                    if (progress >= 100) {
-                        clearInterval(progressInterval);
-                        uploadPreview.src = URL.createObjectURL(file);
+                },
+                (error) => {
+                    console.error('Ошибка загрузки:', error);
+                    showNotification('Ошибка при загрузке видео!');
+                    uploadModal.classList.remove('visible');
+                },
+                () => {
+                    uploadTask.snapshot.ref.getDownloadURL().then((downloadURL) => {
+                        uploadPreview.src = downloadURL;
                         uploadPreview.style.display = 'block';
                         publishBtn.disabled = false;
-                        uploadedFileUrl = URL.createObjectURL(file);
-                    }
-                }, 200);
-            };
-            reader.onerror = () => showNotification('Ошибка при чтении файла!');
-            reader.readAsArrayBuffer(file);
+                        uploadedFileUrl = downloadURL;
+
+                        db.collection('publicVideos').add({
+                            url: downloadURL,
+                            authorId: userId,
+                            description: document.getElementById('videoDescription')?.value || '',
+                            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                        }).then(() => {
+                            console.log('Видео добавлено в общий доступ');
+                        }).catch(err => console.error('Ошибка Firestore:', err));
+                    });
+                }
+            );
         }
 
         function publishVideo() {
@@ -1117,7 +1067,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function cancelUpload() {
             if (uploadedFileUrl) {
-                URL.revokeObjectURL(uploadedFileUrl);
                 uploadedFileUrl = null;
             }
             uploadModal.classList.remove('visible');
@@ -1145,9 +1094,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const closeBtn = document.createElement('button');
             closeBtn.className = 'close-list-btn';
             closeBtn.innerHTML = '<i class="fas fa-times"></i>';
-            closeBtn.addEventListener('click', () => {
-                list.classList.remove('visible');
-            });
+            closeBtn.addEventListener('click', () => list.classList.remove('visible'));
             list.appendChild(closeBtn);
             document.body.appendChild(list);
             return list;
@@ -1170,10 +1117,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const index = videoPlaylist.indexOf(url);
             if (index === -1) return;
             if (confirm('Удалить это видео?')) {
+                const storageRef = storage.refFromURL(url);
+                storageRef.delete().then(() => {
+                    console.log('Видео удалено из Storage');
+                    db.collection('publicVideos').where('url', '==', url).get().then((querySnapshot) => {
+                        querySnapshot.forEach((doc) => doc.ref.delete());
+                        console.log('Видео удалено из Firestore');
+                    }).catch(err => console.error('Ошибка удаления из Firestore:', err));
+                }).catch(err => console.error('Ошибка удаления из Storage:', err));
+
                 videoPlaylist.splice(index, 1);
                 videoDataStore.splice(index, 1);
                 localStorage.removeItem(`videoData_${url}`);
-                URL.revokeObjectURL(url);
                 document.querySelector(`.video-item [data-url="${url}"]`).parentElement.remove();
                 if (currentVideoIndex === index) {
                     currentVideoIndex = Math.min(currentVideoIndex, videoPlaylist.length - 1);
