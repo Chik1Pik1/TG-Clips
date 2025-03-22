@@ -1345,3 +1345,18 @@ body.telegram-fullscreen {
     height: 100% !important;
     width: 100% !important;
 }
+
+body.telegram-fullscreen {
+    height: 100% !important;
+    width: 100% !important;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+.telegram-fullscreen .container,
+.telegram-fullscreen .video-wrapper,
+.telegram-fullscreen #videoPlayer {
+    height: 100% !important;
+    width: 100% !important;
+}
