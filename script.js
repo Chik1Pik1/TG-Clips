@@ -458,18 +458,27 @@ document.addEventListener('DOMContentLoaded', () => {
         dragHandle.addEventListener('mousedown', startDragging);
         dragHandle.addEventListener('touchstart', startDragging, { passive: false });
 
-        function toggleFullscreen() {
-            if (window.Telegram && window.Telegram.WebApp) {
-                Telegram.WebApp.expand();
-                showNotification('Экран уже заполнен');
-            } else {
-                if (!document.fullscreenElement) {
-                    document.documentElement.requestFullscreen().catch(err => console.error('Ошибка:', err));
-                } else {
-                    document.exitFullscreen().catch(err => console.error('Ошибка:', err));
-                }
-            }
+     function toggleFullscreen() {
+        let tg = window.Telegram?.WebApp;
+        if (tg) {
+        if (tg.requestFullscreen) {
+            tg.requestFullscreen();
+            console.log('Полноэкранный режим запрошен');
+            document.body.classList.add('telegram-fullscreen');
+        } else {
+            console.warn('requestFullscreen не поддерживается');
+            tg.expand(); // Запасной вариант для старых версий
+            showNotification('Полноэкранный режим не доступен в этой версии Telegram');
         }
+        } else {
+        // Режим браузера
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => console.error('Ошибка:', err));
+        } else {
+            document.exitFullscreen().catch(err => console.error('Ошибка:', err));
+        }
+        }
+     }
 
         function downloadCurrentVideo() {
             const videoUrl = video.src;
