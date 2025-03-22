@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let tg = window.Telegram?.WebApp;
     if (tg) {
         tg.ready();
+        console.log('Telegram Web App инициализирован, userId:', tg.initDataUnsafe?.user?.id);
     } else {
         console.warn('Telegram Web App SDK не загружен. Работа в режиме браузера.');
     }
@@ -24,14 +25,51 @@ document.addEventListener('DOMContentLoaded', () => {
     const authScreen = document.getElementById('authScreen');
     const playerContainer = document.getElementById('playerContainer');
     const authBtn = document.getElementById('authBtn');
-    const registerChannelBtn = document.getElementById('registerChannelBtn');
+    let registerChannelBtn = document.getElementById('registerChannelBtn');
+    let userAvatar = document.getElementById('userAvatar');
 
-    if (!authScreen || !playerContainer || !authBtn || !registerChannelBtn) {
-        console.error('Необходимые элементы не найдены в DOM');
+    console.log('authScreen:', authScreen);
+    console.log('playerContainer:', playerContainer);
+    console.log('authBtn:', authBtn);
+    console.log('registerChannelBtn:', registerChannelBtn);
+    console.log('userAvatar:', userAvatar);
+
+    if (!authScreen || !playerContainer || !authBtn) {
+        console.error('Критические элементы не найдены в DOM');
         return;
     }
 
-    // Привязываем обработчики сразу
+    if (!registerChannelBtn) {
+        console.warn('registerChannelBtn не найден сразу, ищем позже');
+        setTimeout(() => {
+            registerChannelBtn = document.getElementById('registerChannelBtn');
+            if (registerChannelBtn) {
+                console.log('registerChannelBtn найден позже:', registerChannelBtn);
+                bindRegisterChannelBtn(registerChannelBtn);
+            } else {
+                console.error('registerChannelBtn так и не найден');
+            }
+        }, 1000); // Ждем 1 секунду для динамической загрузки
+    } else {
+        bindRegisterChannelBtn(registerChannelBtn);
+    }
+
+    if (!userAvatar) {
+        console.warn('userAvatar не найден сразу, ищем позже');
+        setTimeout(() => {
+            userAvatar = document.getElementById('userAvatar');
+            if (userAvatar) {
+                console.log('userAvatar найден позже:', userAvatar);
+                bindUserAvatar(userAvatar);
+            } else {
+                console.error('userAvatar так и не найден');
+            }
+        }, 1000);
+    } else {
+        bindUserAvatar(userAvatar);
+    }
+
+    // Привязываем обработчик для authBtn
     authBtn.addEventListener('click', () => {
         console.log('Клик по authBtn');
         if (tg?.initDataUnsafe?.user) {
@@ -42,11 +80,6 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Имитация: Вы вошли как ' + userId);
             showPlayer();
         }
-    });
-
-    registerChannelBtn.addEventListener('click', () => {
-        console.log('Клик по registerChannelBtn, userId:', userId);
-        registerChannel();
     });
 
     // Инициализация Firebase
@@ -162,6 +195,66 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('No Telegram user detected on load');
     }
 
+    function bindRegisterChannelBtn(btn) {
+        btn.addEventListener('click', () => {
+            console.log('Клик по registerChannelBtn, userId:', userId);
+            registerChannel();
+        });
+    }
+
+    function bindUserAvatar(avatar) {
+        avatar.addEventListener('click', (e) => {
+            e.stopPropagation();
+            console.log('Клик по userAvatar, userId:', userId);
+            if (!isHolding) {
+                const channel = channels[userId];
+                if (channel && channel.link) {
+                    if (tg?.isVersionGte('6.0')) {
+                        tg.openTelegramLink(channel.link);
+                    } else {
+                        window.open(channel.link, '_blank');
+                    }
+                } else {
+                    registerChannel();
+                }
+            }
+        });
+
+        let holdTimeout = null;
+        const holdDuration = 2000;
+        let isHolding = false;
+
+        function startHold(e) {
+            e.preventDefault();
+            if (holdTimeout || isHolding) return;
+            isHolding = true;
+            avatar.classList.add('holding');
+            holdTimeout = setTimeout(() => {
+                showVideoManagementList();
+                holdTimeout = null;
+                isHolding = false;
+                avatar.classList.remove('holding');
+            }, holdDuration);
+        }
+
+        function stopHold(e) {
+            if (holdTimeout) {
+                clearTimeout(holdTimeout);
+                holdTimeout = null;
+            }
+            isHolding = false;
+            avatar.classList.remove('holding');
+        }
+
+        avatar.addEventListener('mousedown', startHold);
+        avatar.addEventListener('mouseup', stopHold);
+        avatar.addEventListener('mouseleave', stopHold);
+        avatar.addEventListener('touchstart', startHold, { passive: false });
+        avatar.addEventListener('touchend', stopHold);
+        avatar.addEventListener('touchcancel', stopHold);
+        avatar.addEventListener('touchmove', stopHold, { passive: false });
+    }
+
     function showPlayer() {
         authScreen.style.display = 'none';
         playerContainer.style.display = 'flex';
@@ -170,7 +263,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function registerChannel() {
         console.log('registerChannel вызвана, userId:', userId);
-        // Убираем проверку !userId, так как она избыточна
         if (!tg?.initDataUnsafe?.user && !userId) {
             if (tg) {
                 tg.showAlert('Пожалуйста, войдите через Telegram, чтобы зарегистрировать канал.');
@@ -180,7 +272,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Используем глобальный userId
         if (channels[userId]?.link) {
             showNotification('Канал уже зарегистрирован!');
             if (tg?.isVersionGte('6.0')) {
@@ -202,7 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ]
             }, (buttonId) => {
                 if (buttonId === 'submit') {
-                    channelLink = prompt('Введите ссылку на ваш Telegram-канал:'); // Заменяем tg.WebApp.promptResult на prompt
+                    channelLink = prompt('Введите ссылку на ваш Telegram-канал:');
                     handleChannelLink(channelLink);
                 }
             });
@@ -225,7 +316,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Используем глобальный userId
         if (!channels[userId]) {
             channels[userId] = { videos: [], link: channelLink };
         } else {
@@ -248,63 +338,11 @@ document.addEventListener('DOMContentLoaded', () => {
         initializeTheme();
         initializeTooltips();
 
-        const userAvatar = document.getElementById('userAvatar');
-        if (tg?.initDataUnsafe?.user && tg.initDataUnsafe.user.photo_url) {
+        if (userAvatar && tg?.initDataUnsafe?.user && tg.initDataUnsafe.user.photo_url) {
             userAvatar.src = tg.initDataUnsafe.user.photo_url;
-        } else {
+        } else if (userAvatar) {
             userAvatar.src = 'https://via.placeholder.com/40';
         }
-
-        let holdTimeout = null;
-        const holdDuration = 2000;
-        let isHolding = false;
-
-        userAvatar.addEventListener('click', (e) => {
-            e.stopPropagation();
-            console.log('Клик по userAvatar, userId:', userId);
-            if (!isHolding) {
-                const channel = channels[userId];
-                if (channel && channel.link) {
-                    if (tg?.isVersionGte('6.0')) {
-                        tg.openTelegramLink(channel.link);
-                    } else {
-                        window.open(channel.link, '_blank');
-                    }
-                } else {
-                    registerChannel();
-                }
-            }
-        });
-
-        function startHold(e) {
-            e.preventDefault();
-            if (holdTimeout || isHolding) return;
-            isHolding = true;
-            userAvatar.classList.add('holding');
-            holdTimeout = setTimeout(() => {
-                showVideoManagementList();
-                holdTimeout = null;
-                isHolding = false;
-                userAvatar.classList.remove('holding');
-            }, holdDuration);
-        }
-
-        function stopHold(e) {
-            if (holdTimeout) {
-                clearTimeout(holdTimeout);
-                holdTimeout = null;
-            }
-            isHolding = false;
-            userAvatar.classList.remove('holding');
-        }
-
-        userAvatar.addEventListener('mousedown', startHold);
-        userAvatar.addEventListener('mouseup', stopHold);
-        userAvatar.addEventListener('mouseleave', stopHold);
-        userAvatar.addEventListener('touchstart', startHold, { passive: false });
-        userAvatar.addEventListener('touchend', stopHold);
-        userAvatar.addEventListener('touchcancel', stopHold);
-        userAvatar.addEventListener('touchmove', stopHold, { passive: false });
 
         document.addEventListener('click', (e) => {
             const list = document.getElementById('videoManagementList');
