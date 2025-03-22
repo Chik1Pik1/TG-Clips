@@ -311,7 +311,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let isProgressBarActivated = false;
         let lastTime = 0;
         let hasViewed = false;
-        let isSwiping = false; // Добавляем флаг для свайпа
+        let isSwiping = false;
 
         loadVideo();
         initializeTheme();
@@ -387,13 +387,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateCounters();
             }
             if (isProgressBarActivated) progressBar.classList.remove('visible');
+            isProgressBarActivated = false;
             commentsWindow.classList.remove('visible');
             preloadNextVideo();
         }
 
         video.addEventListener('pause', handlePause);
         function handlePause() {
-            if (!isProgressBarActivated && !isSwiping) { // Не показываем при свайпе
+            if (!isProgressBarActivated) {
                 isProgressBarActivated = true;
                 progressBar.classList.add('visible');
             }
@@ -722,6 +723,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (Math.abs(deltaX) > swipeThresholdHorizontal && Math.abs(deltaX) > Math.abs(deltaY)) {
                     if (deltaX > 0) playNextVideo();
                     else playPreviousVideo();
+                    if (isProgressBarActivated) progressBar.classList.remove('visible');
+                    isProgressBarActivated = false;
                 } else if (Math.abs(deltaY) > swipeThresholdVertical) {
                     if (deltaY < 0) {
                         handleReaction('like');
@@ -779,6 +782,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (Math.abs(deltaX) > swipeThresholdHorizontal && Math.abs(deltaX) > Math.abs(deltaY)) {
                     if (deltaX > 0) playNextVideo();
                     else playPreviousVideo();
+                    if (isProgressBarActivated) progressBar.classList.remove('visible');
+                    isProgressBarActivated = false;
                 } else if (Math.abs(deltaY) > swipeThresholdVertical) {
                     if (deltaY < 0) {
                         handleReaction('like');
@@ -806,14 +811,12 @@ document.addEventListener('DOMContentLoaded', () => {
             recommendNextVideo();
             loadVideo('left');
             hasViewed = false;
-            if (!isProgressBarActivated) progressBar.classList.remove('visible');
         }
 
         function playPreviousVideo() {
             currentVideoIndex = (currentVideoIndex - 1 + videoPlaylist.length) % videoPlaylist.length;
             loadVideo('right');
             hasViewed = false;
-            if (!isProgressBarActivated) progressBar.classList.remove('visible');
         }
 
         function loadVideo(direction = 'left') {
@@ -836,6 +839,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }, { once: true });
                 updateCounters();
                 updateComments();
+                console.log('Comments updated for video:', currentVideoIndex, videoDataStore[currentVideoIndex].comments);
                 updateRating();
                 updateDescription();
                 preloadNextVideo();
@@ -884,11 +888,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateComments();
                 updateCounters();
                 updateVideoCache(currentVideoIndex);
+                console.log('Comment added:', videoData.comments);
             }
         }
 
         function updateComments() {
             const videoData = videoDataStore[currentVideoIndex];
+            console.log('Updating comments:', videoData.comments);
             commentsList.innerHTML = '';
             videoData.comments.forEach((comment, idx) => {
                 const userPhoto = (tg?.initDataUnsafe?.user?.id === comment.userId && tg?.initDataUnsafe?.user?.photo_url) 
