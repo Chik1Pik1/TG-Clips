@@ -48,6 +48,8 @@ body {
     color: var(--text-color);
     overflow: hidden;
     -webkit-tap-highlight-color: transparent;
+    height: 100vh;
+    width: 100vw;
 }
 
 .auth-screen {
@@ -168,7 +170,7 @@ body {
 
 #rating {
     position: absolute;
-    top: 3vh; /* Обычное положение чуть ниже */
+    top: 10vh; /* Опускаем ниже для Telegram */
     left: 2vw;
     display: flex;
     align-items: center;
@@ -185,7 +187,7 @@ body {
 
 #viewCount {
     position: absolute;
-    top: 3vh; /* Обычное положение чуть ниже */
+    top: 10vh; /* Опускаем ниже для Telegram */
     right: 2vw;
     display: flex;
     align-items: center;
@@ -199,13 +201,6 @@ body {
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
     animation: fadeIn 0.5s ease-in;
     z-index: 10;
-}
-
-#viewCount::before {
-    content: "\f06e"; /* Иконка глаза из Font Awesome */
-    font-family: "Font Awesome 6 Free";
-    font-weight: 900; /* Solid стиль для иконки */
-    margin-right: 5px;
 }
 
 @keyframes fadeIn {
@@ -1402,24 +1397,23 @@ body.telegram-fullscreen {
     margin-bottom: 5px;
 }
 
-/* Полноэкранные стили для рейтинга и счётчика */
 @media (fullscreen) {
     #rating {
-        top: 8vh; /* Ещё ниже в полноэкранном режиме */
+        top: 12vh;
         left: 2vw;
     }
     #viewCount {
-        top: 8vh;
+        top: 12vh;
         right: 2vw;
     }
 }
 
 body.telegram-fullscreen #rating {
-    top: 8vh;
+    top: 12vh;
     left: 2vw;
 }
 
 body.telegram-fullscreen #viewCount {
-    top: 8vh;
+    top: 12vh;
     right: 2vw;
 }
