@@ -168,7 +168,7 @@ body {
 
 #rating {
     position: absolute;
-    top: 10vh; /* Сдвинуто ниже для избежания пересечения с меню Telegram */
+    top: 6vh; /* Сдвинуто ниже для избежания пересечения с меню Telegram */
     left: 2vw;
     display: flex;
     align-items: center;
@@ -185,7 +185,7 @@ body {
 
 #viewCount {
     position: absolute;
-    top: 10vh; /* Сдвинуто ниже для избежания пересечения с меню Telegram */
+    top: 6vh; /* Сдвинуто ниже для избежания пересечения с меню Telegram */
     right: 2vw;
     display: flex;
     align-items: center;
