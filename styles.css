@@ -156,17 +156,20 @@ body {
 
 .top-bar {
     position: absolute;
-    top: 2vh;
+    top: 1vh;
     left: 1vw;
     right: 1vw;
     display: flex;
-    justify-content: flex-start; /* Изменено для размещения рейтинга и счётчика рядом */
+    justify-content: space-between;
     align-items: center;
     z-index: 10;
     padding: 0 5px;
 }
 
-.rating {
+#rating {
+    position: absolute;
+    top: 3vh;
+    left: 2vw;
     display: flex;
     align-items: center;
     gap: 5px;
@@ -180,7 +183,10 @@ body {
     z-index: 10;
 }
 
-.view-count {
+#viewCount {
+    position: absolute;
+    top: 3vh;
+    right: 2vw;
     display: flex;
     align-items: center;
     gap: 5px;
@@ -193,12 +199,13 @@ body {
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
     animation: fadeIn 0.5s ease-in;
     z-index: 10;
-    margin-left: 10px; /* Отступ от рейтинга */
 }
 
-.view-count i {
-    font-size: 16px;
-    color: #fff;
+#viewCount::before {
+    content: "\f06e";
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    margin-right: 5px;
 }
 
 @keyframes fadeIn {
@@ -1395,13 +1402,23 @@ body.telegram-fullscreen {
     margin-bottom: 5px;
 }
 
-/* Полноэкранные стили для рейтинга и счётчика */
 @media (fullscreen) {
-    .top-bar {
-        top: 12vh;
+    #rating {
+        top: 8vh;
+        left: 2vw;
+    }
+    #viewCount {
+        top: 8vh;
+        right: 2vw;
     }
 }
 
-body.telegram-fullscreen .top-bar {
-    top: 12vh;
+body.telegram-fullscreen #rating {
+    top: 8vh;
+    left: 2vw;
+}
+
+body.telegram-fullscreen #viewCount {
+    top: 8vh;
+    right: 2vw;
 }
