@@ -160,16 +160,13 @@ body {
     left: 1vw;
     right: 1vw;
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start; /* Изменено для размещения рейтинга и счётчика рядом */
     align-items: center;
     z-index: 10;
     padding: 0 5px;
 }
 
-#rating {
-    position: absolute;
-    top: 3vh; /* Сдвинуто ниже для избежания пересечения с меню Telegram */
-    left: 2vw;
+.rating {
     display: flex;
     align-items: center;
     gap: 5px;
@@ -184,9 +181,6 @@ body {
 }
 
 .view-count {
-    position: absolute;
-    top: 3vh; /* Сдвинуто ниже для избежания пересечения с меню Telegram */
-    right: 2vw;
     display: flex;
     align-items: center;
     gap: 5px;
@@ -199,21 +193,12 @@ body {
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
     animation: fadeIn 0.5s ease-in;
     z-index: 10;
+    margin-left: 10px; /* Отступ от рейтинга */
 }
 
 .view-count i {
     font-size: 16px;
     color: #fff;
-}
-
-#viewCount {
-    font-size: 16px;
-    font-weight: bold;
-    color: #fff;
-}
-
-#viewCount::before {
-    content: none;
 }
 
 @keyframes fadeIn {
@@ -1412,22 +1397,11 @@ body.telegram-fullscreen {
 
 /* Полноэкранные стили для рейтинга и счётчика */
 @media (fullscreen) {
-    #rating {
+    .top-bar {
         top: 12vh;
-        left: 2vw;
-    }
-    .view-count {
-        top: 12vh;
-        right: 2vw;
     }
 }
 
-body.telegram-fullscreen #rating {
+body.telegram-fullscreen .top-bar {
     top: 12vh;
-    left: 2vw;
-}
-
-body.telegram-fullscreen .view-count {
-    top: 12vh;
-    right: 2vw;
 }
