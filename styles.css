@@ -183,7 +183,7 @@ body {
     z-index: 10;
 }
 
-#viewCount {
+.view-count {
     position: absolute;
     top: 3vh; /* Сдвинуто ниже для избежания пересечения с меню Telegram */
     right: 2vw;
@@ -201,8 +201,19 @@ body {
     z-index: 10;
 }
 
+.view-count i {
+    font-size: 16px;
+    color: #fff;
+}
+
+#viewCount {
+    font-size: 16px;
+    font-weight: bold;
+    color: #fff;
+}
+
 #viewCount::before {
-    content: none; /* Убрана лишняя иконка глаза из CSS */
+    content: none;
 }
 
 @keyframes fadeIn {
@@ -1405,7 +1416,7 @@ body.telegram-fullscreen {
         top: 12vh;
         left: 2vw;
     }
-    #viewCount {
+    .view-count {
         top: 12vh;
         right: 2vw;
     }
@@ -1416,7 +1427,7 @@ body.telegram-fullscreen #rating {
     left: 2vw;
 }
 
-body.telegram-fullscreen #viewCount {
+body.telegram-fullscreen .view-count {
     top: 12vh;
     right: 2vw;
 }
