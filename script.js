@@ -159,10 +159,11 @@ class VideoManager {
                 });
             });
             if (!this.videoPlaylist.length) {
+                // Используем ссылки из Firebase Storage
                 this.videoPlaylist = [
-                    "https://www.w3schools.com/html/mov_bbb.mp4",
-                    "https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4",
-                    "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"
+                    "https://firebasestorage.googleapis.com/v0/b/tg-clips.appspot.com/o/stock%2Fmov_bbb.mp4?alt=media",
+                    "https://firebasestorage.googleapis.com/v0/b/tg-clips.appspot.com/o/stock%2Fbig_buck_bunny_720p_1mb.mp4?alt=media",
+                    "https://firebasestorage.googleapis.com/v0/b/tg-clips.appspot.com/o/stock%2FBig_Buck_Bunny_360_10s_1MB.mp4?alt=media"
                 ];
                 this.videoDataStore = this.videoPlaylist.map(() => ({
                     views: new Set(),
@@ -181,7 +182,8 @@ class VideoManager {
                     description: ''
                 }));
             }
-            this.loadVideo();
+            console.log('Плейлист загружен:', this.videoPlaylist);
+            // Не вызываем loadVideo() здесь, ждем действия пользователя
         } catch (error) {
             console.error('Ошибка загрузки видео:', error);
             this.showNotification(`Не удалось загрузить видео: ${error.message}`);
@@ -303,6 +305,20 @@ class VideoManager {
 
         this.initializeTheme();
         this.initializeTooltips();
+
+        // Добавляем кнопку для первого воспроизведения
+        const startButton = document.createElement('button');
+        startButton.textContent = 'Начать просмотр';
+        startButton.style.cssText = `
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            padding: 15px 30px; background: #1a73e8; color: #fff; border: none;
+            border-radius: 10px; z-index: 100; cursor: pointer;
+        `;
+        this.playerContainer.appendChild(startButton);
+        startButton.addEventListener('click', () => {
+            this.loadVideo();
+            startButton.remove();
+        });
     }
 
     handleLoadedMetadata() {
@@ -310,7 +326,7 @@ class VideoManager {
         this.video.play().then(() => {
             this.video.pause();
             this.video.muted = false;
-        }).catch(err => console.error('Unlock error:', err));
+        }).catch(err => console.error('Ошибка разблокировки:', err));
         const videoData = this.videoDataStore[this.currentVideoIndex];
         videoData.duration = this.video.duration;
         this.progressRange.max = this.video.duration;
@@ -519,31 +535,65 @@ class VideoManager {
         this.video.classList.add(fadeOutClass);
         this.video.pause();
         setTimeout(() => {
-            this.videoSource.src = this.videoPlaylist[this.currentVideoIndex];
+            const videoUrl = this.videoPlaylist[this.currentVideoIndex];
+            console.log('Установка источника видео:', videoUrl);
+            this.videoSource.src = videoUrl;
             this.video.load();
+            console.log('Вызван load(), проверяем DOM:', this.video.outerHTML);
+
+            this.video.addEventListener('error', (e) => {
+                console.error('Ошибка загрузки видео:', e);
+                this.showNotification('Не удалось загрузить видео: ' + videoUrl);
+                this.playNextVideo();
+            }, { once: true });
+
             const timeout = setTimeout(() => {
-                if (!this.video.readyState) {
+                if (this.video.readyState < 2) {
+                    console.warn('Видео не загрузилось за 5 секунд:', videoUrl);
                     this.showNotification('Ошибка загрузки видео!');
                     this.playNextVideo();
                 }
             }, 5000);
+
             this.video.addEventListener('canplay', () => {
+                console.log('Видео готово к воспроизведению:', videoUrl);
                 clearTimeout(timeout);
-                const lastPosition = this.videoDataStore[this.currentVideoIndex].lastPosition;
                 this.video.classList.remove('fade-out-left', 'fade-out-right');
                 this.video.classList.add('fade-in');
+                const lastPosition = this.videoDataStore[this.currentVideoIndex].lastPosition;
                 if (lastPosition > 0 && lastPosition < this.video.duration) {
                     this.showResumePrompt(lastPosition);
                 } else {
-                    this.video.play().catch(err => console.log("Ошибка воспроизведения:", err));
+                    console.log('Попытка воспроизведения');
+                    this.video.play().catch(err => {
+                        console.error('Ошибка воспроизведения:', err);
+                        this.showNotification('Нажмите для воспроизведения');
+                        this.showPlayButton();
+                    });
                 }
             }, { once: true });
+
             this.updateCounters();
             this.updateComments();
             this.updateRating();
             this.updateDescription();
             this.preloadNextVideo();
         }, 300);
+    }
+
+    showPlayButton() {
+        const playButton = document.createElement('button');
+        playButton.textContent = 'Воспроизвести';
+        playButton.style.cssText = `
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            padding: 10px 20px; background: #1a73e8; color: #fff; border: none;
+            border-radius: 5px; z-index: 100; cursor: pointer;
+        `;
+        this.playerContainer.appendChild(playButton);
+        playButton.addEventListener('click', () => {
+            this.video.play().catch(err => console.error('Ошибка воспроизведения:', err));
+            playButton.remove();
+        });
     }
 
     showResumePrompt(lastPosition) {
