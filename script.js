@@ -1,8 +1,10 @@
+// Замените это:
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = 'https://seckthcbnslsropswpik.supabase.co'
-const supabaseKey = process.env.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlY2t0aGNibnNsc3JvcHN3cGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMxNzU3ODMsImV4cCI6MjA1ODc1MTc4M30.JoI03vFuRd-7sApD4dZ-zeBfUQlZrzRg7jtz0HgnJyIY
-const supabase = createClient(supabaseUrl, supabaseKey)
+// На это:
+const supabaseUrl = 'https://seckthcbnslsropswpik.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlY2t0aGNibnNsc3JvcHN3cGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMxNzU3ODMsImV4cCI6MjA1ODc1MTc4M30.JoI03vFuRd-7sApD4dZ-zeBfUQlZrzRg7jtz0HgnJyI'; // Вставьте реальный ключ (не process.env)
+const supabase = supabaseClient.createClient(supabaseUrl, supabaseKey);
 // Класс для управления видео
 class VideoManager {
     constructor() {
