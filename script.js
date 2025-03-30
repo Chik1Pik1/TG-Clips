@@ -1,7 +1,7 @@
 // Убедимся, что используем правильный объект из Supabase
 const supabaseUrl = 'https://seckthcbnslsropswpik.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlY2t0aGNibnNsc3JvcHN3cGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMxNzU3ODMsImV4cCI6MjA1ODc1MTc4M30.JoI03vFuRd-7sApD4dZ-zeBfUQlZrzRg7jtz0HgnJyI';
-const supabase = window.supabase.createClient(supabaseUrl, supabaseKey); // Используем window.supabase
+const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 class VideoManager {
     constructor() {
@@ -43,8 +43,6 @@ class VideoManager {
         this.playerContainer = document.getElementById('playerContainer');
         this.authBtn = document.getElementById('authBtn');
         this.registerChannelBtn = document.getElementById('registerChannelBtn');
-        console.log('authBtn:', this.authBtn);
-        console.log('registerChannelBtn:', this.registerChannelBtn);
         this.userAvatar = document.getElementById('userAvatar');
         this.video = document.getElementById('videoPlayer');
         this.videoSource = document.getElementById('videoSource');
@@ -758,6 +756,9 @@ class VideoManager {
         this.uploadPreview.style.display = 'none';
         this.publishBtn.disabled = true;
 
+        const videoDescriptionInput = document.getElementById('videoDescription');
+        if (videoDescriptionInput) videoDescriptionInput.value = ''; // Очищаем поле ввода
+
         try {
             const fileName = `${this.userId}/${Date.now()}_${file.name}`;
             const { data, error } = await supabase.storage
@@ -776,24 +777,11 @@ class VideoManager {
             this.uploadPreview.style.display = 'block';
             this.publishBtn.disabled = false;
 
-            await supabase.from('publicVideos').insert({
-                url: this.uploadedFileUrl,
-                authorId: this.userId,
-                description: document.getElementById('videoDescription')?.value || '',
-                timestamp: new Date().toISOString(),
-                views: [],
-                likes: 0,
-                dislikes: 0,
-                userLikes: [],
-                userDislikes: [],
-                comments: [],
-                shares: 0,
-                viewTime: 0,
-                replays: 0,
-                duration: this.uploadPreview.duration || 0,
-                lastPosition: 0,
-                chatMessages: []
-            });
+            // Ожидаем загрузки метаданных превью, чтобы получить длительность
+            this.uploadPreview.onloadedmetadata = () => {
+                const duration = this.uploadPreview.duration;
+                this.uploadPreview.onloadedmetadata = null; // Удаляем обработчик после использования
+            };
         } catch (error) {
             console.error('Ошибка загрузки:', error);
             this.showNotification(`Ошибка: ${error.message}`);
@@ -801,11 +789,11 @@ class VideoManager {
         }
     }
 
-    publishVideo() {
+    async publishVideo() {
         if (!this.uploadedFileUrl) return;
 
         this.cleanVideoPlaylist();
-        const duration = this.uploadPreview.duration;
+        const duration = this.uploadPreview.duration || 0;
         const description = document.getElementById('videoDescription')?.value || '';
         this.videoPlaylist.push(this.uploadedFileUrl);
         this.videoDataStore.push({
@@ -824,6 +812,30 @@ class VideoManager {
             chatMessages: [],
             description: description
         });
+
+        try {
+            await supabase.from('publicVideos').insert({
+                url: this.uploadedFileUrl,
+                authorId: this.userId,
+                description: description,
+                timestamp: new Date().toISOString(),
+                views: [],
+                likes: 0,
+                dislikes: 0,
+                userLikes: [],
+                userDislikes: [],
+                comments: [],
+                shares: 0,
+                viewTime: 0,
+                replays: 0,
+                duration: duration,
+                lastPosition: 0,
+                chatMessages: []
+            });
+        } catch (error) {
+            console.error('Ошибка публикации в Supabase:', error);
+            this.showNotification('Ошибка при сохранении видео в базе данных!');
+        }
 
         this.addVideoToManagementList(this.uploadedFileUrl, description);
 
@@ -928,7 +940,10 @@ class VideoManager {
 
     updateCounters() {
         const videoData = this.videoDataStore[this.currentVideoIndex];
-        if (this.viewCountEl) this.viewCountEl.textContent = videoData.views.size;
+        if (this.viewCountEl) {
+            // Убедимся, что иконка добавляется только в HTML, а не через CSS
+            this.viewCountEl.innerHTML = `<i class="fas fa-eye"></i> ${videoData.views.size}`;
+        }
         if (this.likeCountEl) this.likeCountEl.textContent = videoData.likes;
         if (this.dislikeCountEl) this.dislikeCountEl.textContent = videoData.dislikes;
         if (this.commentCountEl) this.commentCountEl.textContent = videoData.comments.length;
