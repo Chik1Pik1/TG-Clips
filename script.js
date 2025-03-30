@@ -1,11 +1,7 @@
-// Замените это:
-import { createClient } from '@supabase/supabase-js'
-
-// На это:
 const supabaseUrl = 'https://seckthcbnslsropswpik.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlY2t0aGNibnNsc3JvcHN3cGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMxNzU3ODMsImV4cCI6MjA1ODc1MTc4M30.JoI03vFuRd-7sApD4dZ-zeBfUQlZrzRg7jtz0HgnJyI'; // Вставьте реальный ключ (не process.env)
-const supabase = supabaseClient.createClient(supabaseUrl, supabaseKey);
-// Класс для управления видео
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlY2t0aGNibnNsc3JvcHN3cGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMxNzU3ODMsImV4cCI6MjA1ODc1MTc4M30.JoI03vFuRd-7sApD4dZ-zeBfUQlZrzRg7jtz0HgnJyI';
+const supabase = createClient(supabaseUrl, supabaseKey);
+
 class VideoManager {
     constructor() {
         this.videoPlaylist = [];
@@ -35,6 +31,9 @@ class VideoManager {
         if (this.tg?.initDataUnsafe?.user) {
             this.userId = this.tg.initDataUnsafe.user.id;
             this.showPlayer();
+        } else {
+            console.warn('Telegram Web App не доступен, используем тестовый режим');
+            this.handleAuth();
         }
     }
 
@@ -43,6 +42,8 @@ class VideoManager {
         this.playerContainer = document.getElementById('playerContainer');
         this.authBtn = document.getElementById('authBtn');
         this.registerChannelBtn = document.getElementById('registerChannelBtn');
+        console.log('authBtn:', this.authBtn);
+        console.log('registerChannelBtn:', this.registerChannelBtn);
         this.userAvatar = document.getElementById('userAvatar');
         this.video = document.getElementById('videoPlayer');
         this.videoSource = document.getElementById('videoSource');
@@ -190,10 +191,11 @@ class VideoManager {
     handleAuth() {
         if (this.tg?.initDataUnsafe?.user) {
             this.userId = this.tg.initDataUnsafe.user.id;
+            this.showNotification('Вход успешен: ' + this.userId);
             this.showPlayer();
         } else {
-            this.userId = 'browserTestUser';
-            this.showNotification('Имитация: Вы вошли как ' + this.userId);
+            this.userId = 'browserTestUser_' + Date.now();
+            this.showNotification('Имитация входа: ' + this.userId);
             this.showPlayer();
         }
     }
@@ -261,7 +263,7 @@ class VideoManager {
     }
 
     async registerChannel() {
-        if (!this.tg?.initDataUnsafe?.user && !this.userId) {
+        if (!this.userId) {
             this.showNotification('Пожалуйста, войдите через Telegram.');
             return;
         }
@@ -280,9 +282,14 @@ class VideoManager {
         if (channelLink && channelLink.match(/^https:\/\/t\.me\/[a-zA-Z0-9_]+$/)) {
             this.channels[this.userId] = { videos: [], link: channelLink };
             localStorage.setItem('channels', JSON.stringify(this.channels));
-            await supabase.from('users').upsert({ telegram_id: this.userId, channel_link: channelLink });
-            this.showNotification('Канал успешно зарегистрирован!');
-            if (this.authScreen.style.display !== 'none') this.showPlayer();
+            try {
+                await supabase.from('users').upsert({ telegram_id: this.userId, channel_link: channelLink });
+                this.showNotification('Канал успешно зарегистрирован!');
+                if (this.authScreen.style.display !== 'none') this.showPlayer();
+            } catch (error) {
+                console.error('Ошибка регистрации канала:', error);
+                this.showNotification('Ошибка при регистрации канала!');
+            }
         } else {
             this.showNotification('Введите корректную ссылку на Telegram-канал.');
         }
