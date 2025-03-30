@@ -46,7 +46,8 @@ class VideoManager {
         this.userAvatar = document.getElementById('userAvatar');
         this.video = document.getElementById('videoPlayer');
         this.videoSource = document.getElementById('videoSource');
-        this.viewCountEl = document.getElementById('viewCount');
+        this.viewCountEl = document.querySelector('.view-count'); // Привязываем к контейнеру
+        this.viewCountSpan = document.getElementById('viewCount'); // Отдельная ссылка на span
         this.likeCountEl = document.getElementById('likeCount');
         this.dislikeCountEl = document.getElementById('dislikeCount');
         this.commentCountEl = document.getElementById('commentCount');
@@ -92,7 +93,7 @@ class VideoManager {
     bindEvents() {
         this.authBtn.addEventListener('click', () => this.handleAuth());
         if (this.registerChannelBtn) this.bindRegisterChannelBtn();
-        if (this.userAvatar) this.bindUserAvatar();
+        // Привязка bindUserAvatar перенесена в showPlayer
         this.reactionButtons.forEach(btn => btn.addEventListener('click', (e) => this.handleReaction(btn.dataset.type, e)));
         this.plusBtn.addEventListener('click', (e) => this.toggleSubmenu(e));
         this.uploadBtn.addEventListener('click', (e) => this.downloadCurrentVideo(e));
@@ -203,6 +204,12 @@ class VideoManager {
         this.authScreen.style.display = 'none';
         this.playerContainer.style.display = 'flex';
         this.initializePlayer();
+        if (this.userAvatar) {
+            console.log('Привязываем события для userAvatar');
+            this.bindUserAvatar();
+        } else {
+            console.error('Элемент #userAvatar не найден после отображения playerContainer!');
+        }
     }
 
     bindRegisterChannelBtn() {
@@ -210,17 +217,27 @@ class VideoManager {
     }
 
     bindUserAvatar() {
+        if (!this.userAvatar) {
+            console.error('Элемент #userAvatar не найден при вызове bindUserAvatar!');
+            return;
+        }
+
         this.userAvatar.addEventListener('click', (e) => {
             e.stopPropagation();
+            console.log('Клик по аватару, isHolding:', this.isHolding);
             if (!this.isHolding) {
                 const channel = this.channels[this.userId];
+                console.log('userId:', this.userId, 'channel:', channel);
                 if (channel && channel.link) {
                     if (this.tg?.isVersionGte('6.0')) {
                         this.tg.openTelegramLink(channel.link);
+                        console.log('Открываем ссылку через Telegram:', channel.link);
                     } else {
                         window.open(channel.link, '_blank');
+                        console.log('Открываем ссылку в новом окне:', channel.link);
                     }
                 } else {
+                    console.log('Канал не найден, регистрируем новый');
                     this.registerChannel();
                 }
             }
@@ -235,11 +252,13 @@ class VideoManager {
             if (holdTimeout || this.isHolding) return;
             this.isHolding = true;
             this.userAvatar.classList.add('holding');
+            console.log('Начато удержание аватара');
             holdTimeout = setTimeout(() => {
                 this.showVideoManagementList();
                 holdTimeout = null;
                 this.isHolding = false;
                 this.userAvatar.classList.remove('holding');
+                console.log('Показываем список управления видео');
             }, holdDuration);
         };
 
@@ -250,6 +269,7 @@ class VideoManager {
             }
             this.isHolding = false;
             this.userAvatar.classList.remove('holding');
+            console.log('Удержание отменено');
         };
 
         this.userAvatar.addEventListener('mousedown', startHold);
@@ -757,7 +777,7 @@ class VideoManager {
         this.publishBtn.disabled = true;
 
         const videoDescriptionInput = document.getElementById('videoDescription');
-        if (videoDescriptionInput) videoDescriptionInput.value = ''; // Очищаем поле ввода
+        if (videoDescriptionInput) videoDescriptionInput.value = '';
 
         try {
             const fileName = `${this.userId}/${Date.now()}_${file.name}`;
@@ -777,10 +797,9 @@ class VideoManager {
             this.uploadPreview.style.display = 'block';
             this.publishBtn.disabled = false;
 
-            // Ожидаем загрузки метаданных превью, чтобы получить длительность
             this.uploadPreview.onloadedmetadata = () => {
                 const duration = this.uploadPreview.duration;
-                this.uploadPreview.onloadedmetadata = null; // Удаляем обработчик после использования
+                this.uploadPreview.onloadedmetadata = null;
             };
         } catch (error) {
             console.error('Ошибка загрузки:', error);
@@ -940,9 +959,8 @@ class VideoManager {
 
     updateCounters() {
         const videoData = this.videoDataStore[this.currentVideoIndex];
-        if (this.viewCountEl) {
-            // Убедимся, что иконка добавляется только в HTML, а не через CSS
-            this.viewCountEl.innerHTML = `<i class="fas fa-eye"></i> ${videoData.views.size}`;
+        if (this.viewCountSpan) {
+            this.viewCountSpan.textContent = videoData.views.size; // Обновляем только число
         }
         if (this.likeCountEl) this.likeCountEl.textContent = videoData.likes;
         if (this.dislikeCountEl) this.dislikeCountEl.textContent = videoData.dislikes;
