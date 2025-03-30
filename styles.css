@@ -183,7 +183,7 @@ body {
     z-index: 10;
 }
 
-#viewCount {
+.view-count {
     position: absolute;
     top: 3vh;
     right: 2vw;
@@ -201,8 +201,13 @@ body {
     z-index: 10;
 }
 
-#viewCount::before {
-    content: none; /* Убрана лишняя иконка глаза */
+.view-count i {
+    font-size: 16px; /* Размер иконки */
+    color: #fff; /* Цвет иконки */
+}
+
+#viewCount {
+    font-weight: bold; /* Только для текста числа */
 }
 
 @keyframes fadeIn {
