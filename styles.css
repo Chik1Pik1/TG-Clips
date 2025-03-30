@@ -202,10 +202,7 @@ body {
 }
 
 #viewCount::before {
-    content: "\f06e";
-    font-family: "Font Awesome 6 Free";
-    font-weight: 900;
-    margin-right: 5px;
+    content: none; /* Убрана лишняя иконка глаза */
 }
 
 @keyframes fadeIn {
