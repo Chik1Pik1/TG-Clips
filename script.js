@@ -1,6 +1,6 @@
 // Убедимся, что используем правильный объект из Supabase
 const supabaseUrl = 'https://seckthcbnslsropswpik.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlY2t0aGNibnNsc3JvcHN3cGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMxNzU3ODMsImV4cCI6MjA1ODc1MTc4M30.JoI03vFuRd-7sApD4dZ-zeBfUQlZrzRg7jtz0HgnJyI'; // Замени на полный ключ
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlY2t0aGNibnNsc3JvcHN3cGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMxNzU3ODMsImV4cCI6MjA1ODc1MTc4M30.JoI03vFuRd-7sApD4dZ-zeBfUQlZrzRg7jtz0HgnJyI';
 const supabase = window.supabase.createClient(supabaseUrl, supabaseKey, {
     global: {
         headers: {
@@ -20,6 +20,10 @@ class VideoManager {
         this.userId = null;
         this.uploadedFileUrl = null;
         this.tg = window.Telegram?.WebApp;
+        this.startX = 0; // Добавляем как свойства класса
+        this.startY = 0;
+        this.endX = 0;
+        this.endY = 0;
 
         if (this.tg) {
             this.tg.ready();
@@ -32,14 +36,25 @@ class VideoManager {
     }
 
     async init() {
-        this.tg = window.Telegram.WebApp;
-        this.tg.ready();
-        if (this.tg?.initDataUnsafe?.user) {
-            this.userId = String(this.tg.initDataUnsafe.user.id); // Telegram userId как строка
-            supabase.global.headers['app.user_id'] = this.userId; // Устанавливаем userId
-            this.showPlayer();
+        this.tg = window.Telegram?.WebApp;
+        if (this.tg) {
+            this.tg.ready();
+            if (this.tg.initDataUnsafe?.user) {
+                this.userId = String(this.tg.initDataUnsafe.user.id);
+                supabase.global.headers['app.user_id'] = this.userId;
+                console.log('Telegram инициализирован, userId:', this.userId);
+                this.showPlayer();
+            } else {
+                console.warn('Нет данных пользователя Telegram, используем тестовый режим');
+                this.userId = 'testUser_' + Date.now();
+                supabase.global.headers['app.user_id'] = this.userId;
+                this.showPlayer();
+            }
         } else {
-            this.showNotification('Ошибка: Не удалось получить данные пользователя Telegram');
+            console.warn('Telegram Web App не доступен, работа в режиме браузера');
+            this.userId = 'testUser_' + Date.now();
+            supabase.global.headers['app.user_id'] = this.userId;
+            this.showPlayer();
         }
         this.bindElements();
         this.bindEvents();
@@ -54,8 +69,8 @@ class VideoManager {
         this.userAvatar = document.getElementById('userAvatar');
         this.video = document.getElementById('videoPlayer');
         this.videoSource = document.getElementById('videoSource');
-        this.viewCountEl = document.querySelector('.view-count'); // Привязываем к контейнеру
-        this.viewCountSpan = document.getElementById('viewCount'); // Отдельная ссылка на span
+        this.viewCountEl = document.querySelector('.view-count');
+        this.viewCountSpan = document.getElementById('viewCount');
         this.likeCountEl = document.getElementById('likeCount');
         this.dislikeCountEl = document.getElementById('dislikeCount');
         this.commentCountEl = document.getElementById('commentCount');
@@ -197,11 +212,13 @@ class VideoManager {
 
     handleAuth() {
         if (this.tg?.initDataUnsafe?.user) {
-            this.userId = this.tg.initDataUnsafe.user.id;
+            this.userId = String(this.tg.initDataUnsafe.user.id);
+            supabase.global.headers['app.user_id'] = this.userId;
             this.showNotification('Вход успешен: ' + this.userId);
             this.showPlayer();
         } else {
             this.userId = 'browserTestUser_' + Date.now();
+            supabase.global.headers['app.user_id'] = this.userId;
             this.showNotification('Имитация входа: ' + this.userId);
             this.showPlayer();
         }
@@ -328,10 +345,16 @@ class VideoManager {
         this.hasViewed = false;
         this.isSwiping = false;
 
-        if (this.userAvatar && this.tg?.initDataUnsafe?.user?.photo_url) {
-            this.userAvatar.src = this.tg.initDataUnsafe.user.photo_url;
-        } else if (this.userAvatar) {
-            this.userAvatar.src = 'https://via.placeholder.com/40';
+        if (this.userAvatar) {
+            if (this.tg?.initDataUnsafe?.user?.photo_url) {
+                console.log('Загружаем аватар из Telegram:', this.tg.initDataUnsafe.user.photo_url);
+                this.userAvatar.src = this.tg.initDataUnsafe.user.photo_url;
+            } else {
+                console.log('Аватар из Telegram недоступен, используем заглушку');
+                this.userAvatar.src = 'https://placehold.co/40'; // Рабочая альтернатива
+            }
+        } else {
+            console.error('Элемент #userAvatar не найден');
         }
 
         this.initializeTheme();
@@ -399,7 +422,6 @@ class VideoManager {
     }
 
     setupSwipeAndMouseEvents() {
-        let startX = 0, startY = 0, endX = 0, endY = 0;
         let touchTimeout;
 
         this.swipeArea.addEventListener('touchstart', (e) => this.handleTouchStart(e, touchTimeout), { passive: false });
@@ -413,17 +435,17 @@ class VideoManager {
 
     handleTouchStart(e, touchTimeout) {
         e.preventDefault();
-        startX = e.touches[0].clientX;
-        startY = e.touches[0].clientY;
+        this.startX = e.touches[0].clientX;
+        this.startY = e.touches[0].clientY;
         touchTimeout = setTimeout(() => this.toggleVideoPlayback(), 200);
         this.isSwiping = false;
     }
 
     handleTouchMove(e) {
-        endX = e.touches[0].clientX;
-        endY = e.touches[0].clientY;
-        const deltaX = endX - startX;
-        const deltaY = endY - startY;
+        this.endX = e.touches[0].clientX;
+        this.endY = e.touches[0].clientY;
+        const deltaX = this.endX - this.startX;
+        const deltaY = this.endY - this.startY;
 
         if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
             clearTimeout(touchTimeout);
@@ -432,8 +454,8 @@ class VideoManager {
     }
 
     handleTouchEnd(e, touchTimeout) {
-        const deltaX = endX - startX;
-        const deltaY = endY - startY;
+        const deltaX = this.endX - this.startX;
+        const deltaY = this.endY - this.startY;
         const swipeThresholdHorizontal = 50;
         const swipeThresholdVertical = 20;
 
@@ -457,10 +479,10 @@ class VideoManager {
         } else if (Math.abs(deltaY) > swipeThresholdVertical) {
             if (deltaY < 0) {
                 this.handleReaction('like');
-                this.showFloatingReaction('like', endX, startY);
+                this.showFloatingReaction('like', this.endX, this.startY);
             } else {
                 this.handleReaction('dislike');
-                this.showFloatingReaction('dislike', endX, startY);
+                this.showFloatingReaction('dislike', this.endX, this.startY);
             }
         }
         this.isSwiping = false;
@@ -469,18 +491,18 @@ class VideoManager {
     handleMouseStart(e, touchTimeout) {
         e.preventDefault();
         this.isDragging = true;
-        startX = e.clientX;
-        startY = e.clientY;
+        this.startX = e.clientX;
+        this.startY = e.clientY;
         touchTimeout = setTimeout(() => this.toggleVideoPlayback(), 200);
         this.isSwiping = false;
     }
 
     handleMouseMove(e) {
         if (!this.isDragging) return;
-        endX = e.clientX;
-        endY = e.clientY;
-        const deltaX = endX - startX;
-        const deltaY = endY - startY;
+        this.endX = e.clientX;
+        this.endY = e.clientY;
+        const deltaX = this.endX - this.startX;
+        const deltaY = this.endY - this.startY;
         if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
             clearTimeout(touchTimeout);
             this.isSwiping = true;
@@ -490,8 +512,8 @@ class VideoManager {
     handleMouseEnd(e) {
         if (!this.isDragging) return;
         this.isDragging = false;
-        const deltaX = endX - startX;
-        const deltaY = endY - startY;
+        const deltaX = this.endX - this.startX;
+        const deltaY = this.endY - this.startY;
         const swipeThresholdHorizontal = 50;
         const swipeThresholdVertical = 20;
 
@@ -515,10 +537,10 @@ class VideoManager {
         } else if (Math.abs(deltaY) > swipeThresholdVertical) {
             if (deltaY < 0) {
                 this.handleReaction('like');
-                this.showFloatingReaction('like', endX, startY);
+                this.showFloatingReaction('like', this.endX, this.startY);
             } else {
                 this.handleReaction('dislike');
-                this.showFloatingReaction('dislike', endX, startY);
+                this.showFloatingReaction('dislike', this.endX, this.startY);
             }
         }
         this.isSwiping = false;
@@ -631,7 +653,7 @@ class VideoManager {
         videoData.comments.forEach((comment, idx) => {
             const userPhoto = (this.tg?.initDataUnsafe?.user?.id === comment.userId && this.tg?.initDataUnsafe?.user?.photo_url) 
                 ? this.tg.initDataUnsafe.user.photo_url 
-                : 'https://via.placeholder.com/30';
+                : 'https://placehold.co/30'; // Обновлено на рабочий URL
             const username = (this.tg?.initDataUnsafe?.user?.id === comment.userId && this.tg?.initDataUnsafe?.user?.username) 
                 ? `@${this.tg.initDataUnsafe.user.username}` 
                 : `User_${comment.userId.slice(0, 5)}`;
@@ -762,7 +784,7 @@ class VideoManager {
     }
 
     async handleVideoUpload(e) {
-        this.uploadedFile = e.target.files[0]; // Сохраняем файл в this.uploadedFile
+        this.uploadedFile = e.target.files[0];
         if (!this.uploadedFile) return;
 
         const maxSize = 100 * 1024 * 1024;
@@ -817,16 +839,15 @@ class VideoManager {
     async publishVideo() {
         if (!this.uploadedFile) return;
         const file = this.uploadedFile;
-        const fileName = `${this.userId}/${Date.now()}_${file.name}`; // Уникальное имя файла
+        const fileName = `${this.userId}/${Date.now()}_${file.name}`;
         const description = document.getElementById('videoDescription')?.value || '';
 
-        // Загрузка файла в Storage с метаданными
         const { data, error: uploadError } = await supabase.storage
             .from('videos')
             .upload(fileName, file, {
                 cacheControl: '3600',
                 upsert: false,
-                metadata: { authorId: this.userId } // Передаём authorId в метаданные
+                metadata: { authorId: this.userId }
             });
         if (uploadError) {
             console.error('Ошибка загрузки:', uploadError.message, uploadError.details);
@@ -863,7 +884,7 @@ class VideoManager {
 
         this.showNotification('Видео успешно опубликовано!');
         this.uploadModal.classList.remove('visible');
-        this.uploadedFile = null; // Очищаем файл после публикации
+        this.uploadedFile = null;
         this.currentVideoIndex = this.videoPlaylist.length;
         this.videoPlaylist.push(this.uploadedFileUrl);
         this.videoDataStore.push({
@@ -933,7 +954,6 @@ class VideoManager {
     }
 
     async deleteVideo(url) {
-        // Удаляем запись из publicVideos
         const { error: deleteDbError } = await supabase
             .from('publicVideos')
             .delete()
@@ -945,7 +965,6 @@ class VideoManager {
             throw deleteDbError;
         }
 
-        // Удаляем файл из Storage
         const fileName = url.split('/videos/')[1];
         const { error: deleteStorageError } = await supabase.storage
             .from('videos')
@@ -985,7 +1004,7 @@ class VideoManager {
     updateCounters() {
         const videoData = this.videoDataStore[this.currentVideoIndex];
         if (this.viewCountSpan) {
-            this.viewCountSpan.textContent = videoData.views.size; // Обновляем только число
+            this.viewCountSpan.textContent = videoData.views.size;
         }
         if (this.likeCountEl) this.likeCountEl.textContent = videoData.likes;
         if (this.dislikeCountEl) this.dislikeCountEl.textContent = videoData.dislikes;
