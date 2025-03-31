@@ -1,7 +1,13 @@
 // Убедимся, что используем правильный объект из Supabase
 const supabaseUrl = 'https://seckthcbnslsropswpik.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlY2t0aGNibnNsc3JvcHN3cGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMxNzU3ODMsImV4cCI6MjA1ODc1MTc4M30.JoI03vFuRd-7sApD4dZ-zeBfUQlZrzRg7jtz0HgnJyI';
-const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'; // Замени на полный ключ
+const supabase = window.supabase.createClient(supabaseUrl, supabaseKey, {
+    global: {
+        headers: {
+            'app.user_id': null // Изначально null, обновляется при инициализации
+        }
+    }
+});
 
 class VideoManager {
     constructor() {
@@ -26,16 +32,18 @@ class VideoManager {
     }
 
     async init() {
+        this.tg = window.Telegram.WebApp;
+        this.tg.ready();
+        if (this.tg?.initDataUnsafe?.user) {
+            this.userId = String(this.tg.initDataUnsafe.user.id); // Telegram userId как строка
+            supabase.global.headers['app.user_id'] = this.userId; // Устанавливаем userId
+            this.showPlayer();
+        } else {
+            this.showNotification('Ошибка: Не удалось получить данные пользователя Telegram');
+        }
         this.bindElements();
         this.bindEvents();
         await this.loadInitialVideos();
-        if (this.tg?.initDataUnsafe?.user) {
-            this.userId = this.tg.initDataUnsafe.user.id;
-            this.showPlayer();
-        } else {
-            console.warn('Telegram Web App не доступен, используем тестовый режим');
-            this.handleAuth();
-        }
     }
 
     bindElements() {
@@ -93,7 +101,6 @@ class VideoManager {
     bindEvents() {
         this.authBtn.addEventListener('click', () => this.handleAuth());
         if (this.registerChannelBtn) this.bindRegisterChannelBtn();
-        // Привязка bindUserAvatar перенесена в showPlayer
         this.reactionButtons.forEach(btn => btn.addEventListener('click', (e) => this.handleReaction(btn.dataset.type, e)));
         this.plusBtn.addEventListener('click', (e) => this.toggleSubmenu(e));
         this.uploadBtn.addEventListener('click', (e) => this.downloadCurrentVideo(e));
@@ -145,16 +152,16 @@ class VideoManager {
                         views: new Set(video.views || []),
                         likes: video.likes || 0,
                         dislikes: video.dislikes || 0,
-                        userLikes: new Set(video.userLikes || []),
-                        userDislikes: new Set(video.userDislikes || []),
+                        userLikes: new Set(video.user_likes || []),
+                        userDislikes: new Set(video.user_dislikes || []),
                         comments: video.comments || [],
                         shares: video.shares || 0,
-                        viewTime: video.viewTime || 0,
+                        viewTime: video.view_time || 0,
                         replays: video.replays || 0,
                         duration: video.duration || 0,
-                        authorId: video.authorId,
-                        lastPosition: video.lastPosition || 0,
-                        chatMessages: video.chatMessages || [],
+                        authorId: video.author_id,
+                        lastPosition: video.last_position || 0,
+                        chatMessages: video.chat_messages || [],
                         description: video.description || ''
                     });
                 });
@@ -755,18 +762,18 @@ class VideoManager {
     }
 
     async handleVideoUpload(e) {
-        const file = e.target.files[0];
-        if (!file) return;
+        this.uploadedFile = e.target.files[0]; // Сохраняем файл в this.uploadedFile
+        if (!this.uploadedFile) return;
 
         const maxSize = 100 * 1024 * 1024;
         const validTypes = ['video/mp4', 'video/quicktime', 'video/webm'];
 
-        if (file.size > maxSize) {
+        if (this.uploadedFile.size > maxSize) {
             this.showNotification('Файл слишком большой! Максимум 100 МБ.');
             return;
         }
 
-        if (!validTypes.includes(file.type)) {
+        if (!validTypes.includes(this.uploadedFile.type)) {
             this.showNotification('Неподдерживаемый формат! Используйте MP4, MOV или WebM.');
             return;
         }
@@ -780,14 +787,13 @@ class VideoManager {
         if (videoDescriptionInput) videoDescriptionInput.value = '';
 
         try {
-            const fileName = `${this.userId}/${Date.now()}_${file.name}`;
+            const fileName = `${this.userId}/${Date.now()}_${this.uploadedFile.name}`;
             const { data, error } = await supabase.storage
                 .from('videos')
-                .upload(fileName, file, {
-                    onUploadProgress: (progressEvent) => {
-                        const progress = (progressEvent.loaded / progressEvent.total) * 100;
-                        this.uploadProgress.style.width = `${progress}%`;
-                    }
+                .upload(fileName, this.uploadedFile, {
+                    cacheControl: '3600',
+                    upsert: false,
+                    metadata: { authorId: this.userId }
                 });
 
             if (error) throw error;
@@ -809,11 +815,56 @@ class VideoManager {
     }
 
     async publishVideo() {
-        if (!this.uploadedFileUrl) return;
-
-        this.cleanVideoPlaylist();
-        const duration = this.uploadPreview.duration || 0;
+        if (!this.uploadedFile) return;
+        const file = this.uploadedFile;
+        const fileName = `${this.userId}/${Date.now()}_${file.name}`; // Уникальное имя файла
         const description = document.getElementById('videoDescription')?.value || '';
+
+        // Загрузка файла в Storage с метаданными
+        const { data, error: uploadError } = await supabase.storage
+            .from('videos')
+            .upload(fileName, file, {
+                cacheControl: '3600',
+                upsert: false,
+                metadata: { authorId: this.userId } // Передаём authorId в метаданные
+            });
+        if (uploadError) {
+            console.error('Ошибка загрузки:', uploadError.message, uploadError.details);
+            this.showNotification(`Ошибка загрузки: ${uploadError.message}`);
+            throw uploadError;
+        }
+
+        this.uploadedFileUrl = `${supabaseUrl}/storage/v1/object/public/videos/${fileName}`;
+        const videoData = {
+            url: this.uploadedFileUrl,
+            author_id: this.userId,
+            description,
+            timestamp: new Date().toISOString(),
+            views: [],
+            likes: 0,
+            dislikes: 0,
+            user_likes: [],
+            user_dislikes: [],
+            comments: [],
+            shares: 0,
+            view_time: 0,
+            replays: 0,
+            duration: this.uploadPreview?.duration || 0,
+            last_position: 0,
+            chat_messages: []
+        };
+
+        const { error: insertError } = await supabase.from('publicVideos').insert(videoData);
+        if (insertError) {
+            console.error('Ошибка вставки:', insertError.message, insertError.details);
+            this.showNotification(`Ошибка: ${insertError.message}`);
+            throw insertError;
+        }
+
+        this.showNotification('Видео успешно опубликовано!');
+        this.uploadModal.classList.remove('visible');
+        this.uploadedFile = null; // Очищаем файл после публикации
+        this.currentVideoIndex = this.videoPlaylist.length;
         this.videoPlaylist.push(this.uploadedFileUrl);
         this.videoDataStore.push({
             views: new Set(),
@@ -825,55 +876,18 @@ class VideoManager {
             shares: 0,
             viewTime: 0,
             replays: 0,
-            duration: duration,
+            duration: videoData.duration,
             authorId: this.userId,
             lastPosition: 0,
             chatMessages: [],
             description: description
         });
-
-        try {
-            await supabase.from('publicVideos').insert({
-                url: this.uploadedFileUrl,
-                authorId: this.userId,
-                description: description,
-                timestamp: new Date().toISOString(),
-                views: [],
-                likes: 0,
-                dislikes: 0,
-                userLikes: [],
-                userDislikes: [],
-                comments: [],
-                shares: 0,
-                viewTime: 0,
-                replays: 0,
-                duration: duration,
-                lastPosition: 0,
-                chatMessages: []
-            });
-        } catch (error) {
-            console.error('Ошибка публикации в Supabase:', error);
-            this.showNotification('Ошибка при сохранении видео в базе данных!');
-        }
-
-        this.addVideoToManagementList(this.uploadedFileUrl, description);
-
-        if (this.channels[this.userId]) {
-            this.channels[this.userId].videos.push(this.uploadedFileUrl);
-            localStorage.setItem('channels', JSON.stringify(this.channels));
-        }
-
-        this.currentVideoIndex = this.videoPlaylist.length - 1;
         this.loadVideo();
-        this.updateVideoCache(this.currentVideoIndex);
-        this.showNotification('Видео успешно загружено и добавлено в ваш канал!');
-        this.uploadModal.classList.remove('visible');
-        document.getElementById('videoDescription').value = '';
-        this.uploadedFileUrl = null;
     }
 
     cancelUpload() {
         this.uploadedFileUrl = null;
+        this.uploadedFile = null;
         this.uploadModal.classList.remove('visible');
     }
 
@@ -919,28 +933,39 @@ class VideoManager {
     }
 
     async deleteVideo(url) {
+        // Удаляем запись из publicVideos
+        const { error: deleteDbError } = await supabase
+            .from('publicVideos')
+            .delete()
+            .eq('url', url)
+            .eq('author_id', this.userId);
+        if (deleteDbError) {
+            console.error('Ошибка удаления из базы:', deleteDbError.message, deleteDbError.details);
+            this.showNotification(`Ошибка: ${deleteDbError.message}`);
+            throw deleteDbError;
+        }
+
+        // Удаляем файл из Storage
+        const fileName = url.split('/videos/')[1];
+        const { error: deleteStorageError } = await supabase.storage
+            .from('videos')
+            .remove([fileName]);
+        if (deleteStorageError) {
+            console.error('Ошибка удаления из Storage:', deleteStorageError.message, deleteStorageError.details);
+            this.showNotification(`Ошибка: ${deleteStorageError.message}`);
+            throw deleteStorageError;
+        }
+
+        this.showNotification('Видео успешно удалено!');
         const index = this.videoPlaylist.indexOf(url);
-        if (index === -1) return;
-        if (confirm('Удалить это видео?')) {
-            try {
-                const { error: storageError } = await supabase.storage.from('videos').remove([url.split('/videos/')[1]]);
-                if (storageError) throw storageError;
-
-                const { error: dbError } = await supabase.from('publicVideos').delete().eq('url', url);
-                if (dbError) throw dbError;
-
-                this.videoPlaylist.splice(index, 1);
-                this.videoDataStore.splice(index, 1);
-                localStorage.removeItem(`videoData_${url}`);
-                document.querySelector(`.video-item [data-url="${url}"]`).parentElement.remove();
-                if (this.currentVideoIndex === index) {
-                    this.currentVideoIndex = Math.min(this.currentVideoIndex, this.videoPlaylist.length - 1);
-                    this.loadVideo();
-                }
-                this.showNotification('Видео удалено!');
-            } catch (error) {
-                console.error('Ошибка удаления видео:', error);
-                this.showNotification('Ошибка при удалении видео!');
+        if (index !== -1) {
+            this.videoPlaylist.splice(index, 1);
+            this.videoDataStore.splice(index, 1);
+            localStorage.removeItem(`videoData_${url}`);
+            document.querySelector(`.video-item [data-url="${url}"]`)?.parentElement.remove();
+            if (this.currentVideoIndex === index) {
+                this.currentVideoIndex = Math.min(this.currentVideoIndex, this.videoPlaylist.length - 1);
+                this.loadVideo();
             }
         }
     }
@@ -1050,15 +1075,15 @@ class VideoManager {
         const url = this.videoPlaylist[index];
         const cacheData = {
             duration: videoData.duration,
-            lastPosition: videoData.lastPosition,
-            userLikes: Array.from(videoData.userLikes),
-            userDislikes: Array.from(videoData.userDislikes),
+            last_position: videoData.lastPosition,
+            user_likes: Array.from(videoData.userLikes),
+            user_dislikes: Array.from(videoData.userDislikes),
             comments: videoData.comments,
-            chatMessages: videoData.chatMessages,
+            chat_messages: videoData.chatMessages,
             likes: videoData.likes,
             dislikes: videoData.dislikes,
             shares: videoData.shares,
-            viewTime: videoData.viewTime,
+            view_time: videoData.viewTime,
             replays: videoData.replays,
             views: Array.from(videoData.views),
             description: videoData.description
