@@ -18,6 +18,7 @@ class VideoManager {
         this.startY = 0;
         this.endX = 0;
         this.endY = 0;
+        this.touchTimeout = null; // Добавляем как свойство класса
 
         if (this.tg) {
             this.tg.ready();
@@ -30,7 +31,7 @@ class VideoManager {
     }
 
     async init() {
-        console.log('Скрипт обновлён, версия 6');
+        console.log('Скрипт обновлён, версия 7');
         this.tg = window.Telegram?.WebApp;
         if (this.tg) {
             this.tg.ready();
@@ -48,8 +49,8 @@ class VideoManager {
             this.userId = 'testUser_' + Date.now();
             console.log('Тестовый userId:', this.userId);
         }
-        this.bindElements(); // Сначала привязываем элементы
-        this.showPlayer();   // Затем показываем плеер
+        this.bindElements();
+        this.showPlayer();
         this.bindEvents();
         await this.loadInitialVideos();
     }
@@ -212,19 +213,18 @@ class VideoManager {
             }
         });
 
-        let holdTimeout = null;
         const holdDuration = 2000;
         this.isHolding = false;
 
         const startHold = (e) => {
             e.preventDefault();
-            if (holdTimeout || this.isHolding) return;
+            if (this.touchTimeout || this.isHolding) return;
             this.isHolding = true;
             this.userAvatar.classList.add('holding');
             console.log('Начато удержание аватара');
-            holdTimeout = setTimeout(() => {
+            this.touchTimeout = setTimeout(() => {
                 this.showVideoManagementList();
-                holdTimeout = null;
+                this.touchTimeout = null;
                 this.isHolding = false;
                 this.userAvatar.classList.remove('holding');
                 console.log('Показываем список управления видео');
@@ -232,9 +232,9 @@ class VideoManager {
         };
 
         const stopHold = () => {
-            if (holdTimeout) {
-                clearTimeout(holdTimeout);
-                holdTimeout = null;
+            if (this.touchTimeout) {
+                clearTimeout(this.touchTimeout);
+                this.touchTimeout = null;
             }
             this.isHolding = false;
             this.userAvatar.classList.remove('holding');
@@ -296,7 +296,7 @@ class VideoManager {
                 this.userAvatar.src = this.tg.initDataUnsafe.user.photo_url;
             } else {
                 console.log('Аватар из Telegram недоступен, используем заглушку');
-                this.userAvatar.src = 'https://placehold.co/40';
+                this.userAvatar.src = 'https://placehold.co/30';
             }
         } else {
             console.error('Элемент #userAvatar не найден');
@@ -432,22 +432,20 @@ class VideoManager {
     }
 
     setupSwipeAndMouseEvents() {
-        let touchTimeout;
-
-        this.swipeArea.addEventListener('touchstart', (e) => this.handleTouchStart(e, touchTimeout), { passive: false });
+        this.swipeArea.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
         this.swipeArea.addEventListener('touchmove', this.throttle((e) => this.handleTouchMove(e), 16), { passive: false });
-        this.swipeArea.addEventListener('touchend', (e) => this.handleTouchEnd(e, touchTimeout));
+        this.swipeArea.addEventListener('touchend', (e) => this.handleTouchEnd(e));
 
-        this.swipeArea.addEventListener('mousedown', (e) => this.handleMouseStart(e, touchTimeout));
+        this.swipeArea.addEventListener('mousedown', (e) => this.handleMouseStart(e));
         this.swipeArea.addEventListener('mousemove', this.throttle((e) => this.handleMouseMove(e), 16));
         this.swipeArea.addEventListener('mouseup', (e) => this.handleMouseEnd(e));
     }
 
-    handleTouchStart(e, touchTimeout) {
+    handleTouchStart(e) {
         e.preventDefault();
         this.startX = e.touches[0].clientX;
         this.startY = e.touches[0].clientY;
-        touchTimeout = setTimeout(() => this.toggleVideoPlayback(), 200);
+        this.touchTimeout = setTimeout(() => this.toggleVideoPlayback(), 200);
         this.isSwiping = false;
     }
 
@@ -458,12 +456,13 @@ class VideoManager {
         const deltaY = this.endY - this.startY;
 
         if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
-            clearTimeout(touchTimeout);
+            clearTimeout(this.touchTimeout);
+            this.touchTimeout = null;
             this.isSwiping = true;
         }
     }
 
-    handleTouchEnd(e, touchTimeout) {
+    handleTouchEnd(e) {
         const deltaX = this.endX - this.startX;
         const deltaY = this.endY - this.startY;
         const swipeThresholdHorizontal = 50;
@@ -474,7 +473,10 @@ class VideoManager {
             return;
         }
 
-        clearTimeout(touchTimeout);
+        if (this.touchTimeout) {
+            clearTimeout(this.touchTimeout);
+            this.touchTimeout = null;
+        }
 
         if (!this.userId) {
             this.showNotification('Войдите, чтобы ставить реакции');
@@ -501,12 +503,12 @@ class VideoManager {
         this.isSwiping = false;
     }
 
-    handleMouseStart(e, touchTimeout) {
+    handleMouseStart(e) {
         e.preventDefault();
         this.isDragging = true;
         this.startX = e.clientX;
         this.startY = e.clientY;
-        touchTimeout = setTimeout(() => this.toggleVideoPlayback(), 200);
+        this.touchTimeout = setTimeout(() => this.toggleVideoPlayback(), 200);
         this.isSwiping = false;
     }
 
@@ -517,7 +519,10 @@ class VideoManager {
         const deltaX = this.endX - this.startX;
         const deltaY = this.endY - this.startY;
         if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
-            clearTimeout(touchTimeout);
+            if (this.touchTimeout) {
+                clearTimeout(this.touchTimeout);
+                this.touchTimeout = null;
+            }
             this.isSwiping = true;
         }
     }
@@ -535,7 +540,10 @@ class VideoManager {
             return;
         }
 
-        clearTimeout(touchTimeout);
+        if (this.touchTimeout) {
+            clearTimeout(this.touchTimeout);
+            this.touchTimeout = null;
+        }
 
         if (!this.userId) {
             this.showNotification('Войдите, чтобы ставить реакции');
@@ -1385,8 +1393,11 @@ class VideoManager {
         e.stopPropagation();
         e.preventDefault();
         if (this.tg) {
-            if (this.tg.requestFullscreen) {
-                this.tg.requestFullscreen();
+            if (this.tg.isVersionGte('6.1') && this.tg.requestFullscreen) {
+                this.tg.requestFullscreen().catch(() => {
+                    this.tg.expand();
+                    this.showNotification('Полноэкранный режим не поддерживается');
+                });
                 document.body.classList.add('telegram-fullscreen');
             } else {
                 this.tg.expand();
