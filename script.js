@@ -1,13 +1,7 @@
 // Убедимся, что используем правильный объект из Supabase
 const supabaseUrl = 'https://seckthcbnslsropswpik.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlY2t0aGNibnNsc3JvcHN3cGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMxNzU3ODMsImV4cCI6MjA1ODc1MTc4M30.JoI03vFuRd-7sApD4dZ-zeBfUQlZrzRg7jtz0HgnJyI';
-const supabase = window.supabase.createClient(supabaseUrl, supabaseKey, {
-    global: {
-        headers: {
-            'app.user_id': null // Изначально null, обновляется при инициализации
-        }
-    }
-});
+const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 class VideoManager {
     constructor() {
@@ -35,31 +29,28 @@ class VideoManager {
         this.channels = JSON.parse(localStorage.getItem('channels')) || {};
     }
 
-    async init() {
-        this.tg = window.Telegram?.WebApp;
-        if (this.tg) {
-            this.tg.ready();
-            if (this.tg.initDataUnsafe?.user) {
-                this.userId = String(this.tg.initDataUnsafe.user.id);
-                supabase.global.headers['app.user_id'] = this.userId;
-                console.log('Telegram инициализирован, userId:', this.userId);
-                this.showPlayer();
-            } else {
-                console.warn('Нет данных пользователя Telegram, используем тестовый режим');
-                this.userId = 'testUser_' + Date.now();
-                supabase.global.headers['app.user_id'] = this.userId;
-                this.showPlayer();
-            }
-        } else {
-            console.warn('Telegram Web App не доступен, работа в режиме браузера');
-            this.userId = 'testUser_' + Date.now();
-            supabase.global.headers['app.user_id'] = this.userId;
+async init() {
+    this.tg = window.Telegram?.WebApp;
+    if (this.tg) {
+        this.tg.ready();
+        if (this.tg.initDataUnsafe?.user) {
+            this.userId = String(this.tg.initDataUnsafe.user.id);
+            console.log('Telegram инициализирован, userId:', this.userId);
             this.showPlayer();
+        } else {
+            console.warn('Нет данных пользователя Telegram, используем тестовый режим');
+            this.userId = 'testUser_' + Date.now();
+            this.showPlayer(); // Переход в плеер даже в тестовом режиме
         }
-        this.bindElements();
-        this.bindEvents();
-        await this.loadInitialVideos();
+    } else {
+        console.warn('Telegram Web App не доступен, работа в режиме браузера');
+        this.userId = 'testUser_' + Date.now();
+        this.showPlayer();
     }
+    this.bindElements();
+    this.bindEvents();
+    await this.loadInitialVideos();
+}
 
     bindElements() {
         this.authScreen = document.getElementById('authScreen');
