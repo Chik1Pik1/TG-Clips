@@ -30,7 +30,7 @@ class VideoManager {
     }
 
     async init() {
-        console.log('Скрипт обновлён, версия 3');
+        console.log('Скрипт обновлён, версия 6');
         this.tg = window.Telegram?.WebApp;
         if (this.tg) {
             this.tg.ready();
@@ -38,20 +38,18 @@ class VideoManager {
             if (this.tg.initDataUnsafe?.user) {
                 this.userId = String(this.tg.initDataUnsafe.user.id);
                 console.log('Telegram инициализирован, userId:', this.userId);
-                this.showPlayer();
             } else {
                 console.warn('Нет данных пользователя Telegram, используем тестовый режим');
                 this.userId = 'testUser_' + Date.now();
                 console.log('Тестовый userId:', this.userId);
-                this.showPlayer();
             }
         } else {
             console.warn('Telegram Web App не доступен, работа в режиме браузера');
             this.userId = 'testUser_' + Date.now();
             console.log('Тестовый userId:', this.userId);
-            this.showPlayer();
         }
-        this.bindElements();
+        this.bindElements(); // Сначала привязываем элементы
+        this.showPlayer();   // Затем показываем плеер
         this.bindEvents();
         await this.loadInitialVideos();
     }
@@ -152,70 +150,6 @@ class VideoManager {
         console.log('События привязаны');
     }
 
-    async loadInitialVideos() {
-        try {
-            const { data, error } = await supabase
-                .from('publicVideos')
-                .select('*')
-                .order('timestamp', { ascending: false })
-                .limit(10);
-
-            if (error) throw error;
-
-            this.videoPlaylist = [];
-            this.videoDataStore = [];
-
-            if (data && data.length) {
-                data.forEach(video => {
-                    this.videoPlaylist.push(video.url);
-                    this.videoDataStore.push({
-                        views: new Set(video.views || []),
-                        likes: video.likes || 0,
-                        dislikes: video.dislikes || 0,
-                        userLikes: new Set(video.user_likes || []),
-                        userDislikes: new Set(video.user_dislikes || []),
-                        comments: video.comments || [],
-                        shares: video.shares || 0,
-                        viewTime: video.view_time || 0,
-                        replays: video.replays || 0,
-                        duration: video.duration || 0,
-                        authorId: video.author_id,
-                        lastPosition: video.last_position || 0,
-                        chatMessages: video.chat_messages || [],
-                        description: video.description || ''
-                    });
-                });
-            } else {
-                this.videoPlaylist = [
-                    "https://www.w3schools.com/html/mov_bbb.mp4",
-                    "https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4",
-                    "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"
-                ];
-                this.videoDataStore = this.videoPlaylist.map(() => ({
-                    views: new Set(),
-                    likes: 0,
-                    dislikes: 0,
-                    userLikes: new Set(),
-                    userDislikes: new Set(),
-                    comments: [],
-                    shares: 0,
-                    viewTime: 0,
-                    replays: 0,
-                    duration: 0,
-                    authorId: 'testAuthor123',
-                    lastPosition: 0,
-                    chatMessages: [],
-                    description: ''
-                }));
-            }
-            this.loadVideo();
-            console.log('Видео загружены:', this.videoPlaylist);
-        } catch (error) {
-            console.error('Ошибка загрузки видео:', error);
-            this.showNotification(`Не удалось загрузить видео: ${error.message}`);
-        }
-    }
-
     handleAuth() {
         console.log('handleAuth вызван');
         if (this.tg?.initDataUnsafe?.user) {
@@ -231,6 +165,8 @@ class VideoManager {
 
     showPlayer() {
         console.log('showPlayer вызван');
+        if (!this.authScreen) console.error('authScreen не найден в DOM');
+        if (!this.playerContainer) console.error('playerContainer не найден в DOM');
         if (this.authScreen && this.playerContainer) {
             this.authScreen.style.display = 'none';
             this.playerContainer.style.display = 'flex';
@@ -371,6 +307,70 @@ class VideoManager {
         console.log('Плеер инициализирован');
     }
 
+    async loadInitialVideos() {
+        try {
+            const { data, error } = await supabase
+                .from('publicVideos')
+                .select('*')
+                .order('timestamp', { ascending: false })
+                .limit(10);
+
+            if (error) throw error;
+
+            this.videoPlaylist = [];
+            this.videoDataStore = [];
+
+            if (data && data.length) {
+                data.forEach(video => {
+                    this.videoPlaylist.push(video.url);
+                    this.videoDataStore.push({
+                        views: new Set(video.views || []),
+                        likes: video.likes || 0,
+                        dislikes: video.dislikes || 0,
+                        userLikes: new Set(video.user_likes || []),
+                        userDislikes: new Set(video.user_dislikes || []),
+                        comments: video.comments || [],
+                        shares: video.shares || 0,
+                        viewTime: video.view_time || 0,
+                        replays: video.replays || 0,
+                        duration: video.duration || 0,
+                        authorId: video.author_id,
+                        lastPosition: video.last_position || 0,
+                        chatMessages: video.chat_messages || [],
+                        description: video.description || ''
+                    });
+                });
+            } else {
+                this.videoPlaylist = [
+                    "https://www.w3schools.com/html/mov_bbb.mp4",
+                    "https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4",
+                    "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"
+                ];
+                this.videoDataStore = this.videoPlaylist.map(() => ({
+                    views: new Set(),
+                    likes: 0,
+                    dislikes: 0,
+                    userLikes: new Set(),
+                    userDislikes: new Set(),
+                    comments: [],
+                    shares: 0,
+                    viewTime: 0,
+                    replays: 0,
+                    duration: 0,
+                    authorId: 'testAuthor123',
+                    lastPosition: 0,
+                    chatMessages: [],
+                    description: ''
+                }));
+            }
+            this.loadVideo();
+            console.log('Видео загружены:', this.videoPlaylist);
+        } catch (error) {
+            console.error('Ошибка загрузки видео:', error);
+            this.showNotification(`Не удалось загрузить видео: ${error.message}`);
+        }
+    }
+
     handleLoadedMetadata() {
         this.video.muted = true;
         this.video.play().then(() => {
@@ -467,7 +467,7 @@ class VideoManager {
         const deltaX = this.endX - this.startX;
         const deltaY = this.endY - this.startY;
         const swipeThresholdHorizontal = 50;
-        const swipeThresholdVertical = 20;
+        const swipeThresholdVertical = 50;
 
         if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
             this.isSwiping = false;
@@ -477,20 +477,23 @@ class VideoManager {
         clearTimeout(touchTimeout);
 
         if (!this.userId) {
+            this.showNotification('Войдите, чтобы ставить реакции');
             this.isSwiping = false;
             return;
         }
 
         if (Math.abs(deltaX) > swipeThresholdHorizontal && Math.abs(deltaX) > Math.abs(deltaY)) {
+            console.log('Горизонтальный свайп:', deltaX > 0 ? 'вправо' : 'влево');
             if (deltaX > 0) this.playNextVideo();
             else this.playPreviousVideo();
             if (this.isProgressBarActivated) this.progressBar.classList.remove('visible');
             this.isProgressBarActivated = false;
         } else if (Math.abs(deltaY) > swipeThresholdVertical) {
-            if (deltaY < 0) {
+            console.log('Вертикальный свайп:', deltaY < 0 ? 'вверх' : 'вниз');
+            if (deltaY < 0) { // Свайп вверх = лайк
                 this.handleReaction('like');
                 this.showFloatingReaction('like', this.endX, this.startY);
-            } else {
+            } else { // Свайп вниз = дизлайк
                 this.handleReaction('dislike');
                 this.showFloatingReaction('dislike', this.endX, this.startY);
             }
@@ -525,7 +528,7 @@ class VideoManager {
         const deltaX = this.endX - this.startX;
         const deltaY = this.endY - this.startY;
         const swipeThresholdHorizontal = 50;
-        const swipeThresholdVertical = 20;
+        const swipeThresholdVertical = 50;
 
         if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
             this.isSwiping = false;
@@ -535,20 +538,23 @@ class VideoManager {
         clearTimeout(touchTimeout);
 
         if (!this.userId) {
+            this.showNotification('Войдите, чтобы ставить реакции');
             this.isSwiping = false;
             return;
         }
 
         if (Math.abs(deltaX) > swipeThresholdHorizontal && Math.abs(deltaX) > Math.abs(deltaY)) {
+            console.log('Горизонтальный свайп:', deltaX > 0 ? 'вправо' : 'влево');
             if (deltaX > 0) this.playNextVideo();
             else this.playPreviousVideo();
             if (this.isProgressBarActivated) this.progressBar.classList.remove('visible');
             this.isProgressBarActivated = false;
         } else if (Math.abs(deltaY) > swipeThresholdVertical) {
-            if (deltaY < 0) {
+            console.log('Вертикальный свайп:', deltaY < 0 ? 'вверх' : 'вниз');
+            if (deltaY < 0) { // Свайп вверх = лайк
                 this.handleReaction('like');
                 this.showFloatingReaction('like', this.endX, this.startY);
-            } else {
+            } else { // Свайп вниз = дизлайк
                 this.handleReaction('dislike');
                 this.showFloatingReaction('dislike', this.endX, this.startY);
             }
@@ -722,7 +728,7 @@ class VideoManager {
             descriptionEl = document.createElement('div');
             descriptionEl.id = 'videoDescriptionDisplay';
             const videoWrapper = document.querySelector('.video-wrapper');
-            videoWrapper.insertAdjacentElement('afterend', descriptionEl);
+            if (videoWrapper) videoWrapper.insertAdjacentElement('afterend', descriptionEl);
         }
         descriptionEl.textContent = this.videoDataStore[this.currentVideoIndex].description || 'Описание отсутствует';
     }
@@ -818,32 +824,14 @@ class VideoManager {
         const videoDescriptionInput = document.getElementById('videoDescription');
         if (videoDescriptionInput) videoDescriptionInput.value = '';
 
-        try {
-            const fileName = `${this.userId}/${Date.now()}_${this.uploadedFile.name}`;
-            const { data, error } = await supabase.storage
-                .from('videos')
-                .upload(fileName, this.uploadedFile, {
-                    cacheControl: '3600',
-                    upsert: false,
-                    metadata: { authorId: this.userId }
-                });
+        this.uploadPreview.src = URL.createObjectURL(this.uploadedFile);
+        this.uploadPreview.style.display = 'block';
+        this.publishBtn.disabled = false;
 
-            if (error) throw error;
-
-            this.uploadedFileUrl = `${supabaseUrl}/storage/v1/object/public/videos/${fileName}`;
-            this.uploadPreview.src = this.uploadedFileUrl;
-            this.uploadPreview.style.display = 'block';
-            this.publishBtn.disabled = false;
-
-            this.uploadPreview.onloadedmetadata = () => {
-                const duration = this.uploadPreview.duration;
-                this.uploadPreview.onloadedmetadata = null;
-            };
-        } catch (error) {
-            console.error('Ошибка загрузки:', error);
-            this.showNotification(`Ошибка: ${error.message}`);
-            this.uploadModal.classList.remove('visible');
-        }
+        this.uploadPreview.onloadedmetadata = () => {
+            const duration = this.uploadPreview.duration;
+            this.uploadPreview.onloadedmetadata = null;
+        };
     }
 
     async publishVideo() {
@@ -852,7 +840,7 @@ class VideoManager {
         const fileName = `${this.userId}/${Date.now()}_${file.name}`;
         const description = document.getElementById('videoDescription')?.value || '';
 
-        const { data, error: uploadError } = await supabase.storage
+        const { data: storageData, error: uploadError } = await supabase.storage
             .from('videos')
             .upload(fileName, file, {
                 cacheControl: '3600',
@@ -860,9 +848,9 @@ class VideoManager {
                 metadata: { authorId: this.userId }
             });
         if (uploadError) {
-            console.error('Ошибка загрузки:', uploadError.message);
+            console.error('Ошибка загрузки в Storage:', uploadError.message);
             this.showNotification(`Ошибка загрузки: ${uploadError.message}`);
-            throw uploadError;
+            return;
         }
 
         this.uploadedFileUrl = `${supabaseUrl}/storage/v1/object/public/videos/${fileName}`;
@@ -885,11 +873,15 @@ class VideoManager {
             chat_messages: []
         };
 
-        const { error: insertError } = await supabase.from('publicVideos').insert(videoData);
+        const { data, error: insertError } = await supabase
+            .from('publicVideos')
+            .insert(videoData)
+            .select();
         if (insertError) {
-            console.error('Ошибка вставки:', insertError.message);
+            console.error('Ошибка вставки в базу:', insertError.message);
             this.showNotification(`Ошибка: ${insertError.message}`);
-            throw insertError;
+            await supabase.storage.from('videos').remove([fileName]);
+            return;
         }
 
         this.showNotification('Видео успешно опубликовано!');
@@ -1013,9 +1005,7 @@ class VideoManager {
 
     updateCounters() {
         const videoData = this.videoDataStore[this.currentVideoIndex];
-        if (this.viewCountSpan) {
-            this.viewCountSpan.textContent = videoData.views.size;
-        }
+        if (this.viewCountSpan) this.viewCountSpan.textContent = videoData.views.size;
         if (this.likeCountEl) this.likeCountEl.textContent = videoData.likes;
         if (this.dislikeCountEl) this.dislikeCountEl.textContent = videoData.dislikes;
         if (this.commentCountEl) this.commentCountEl.textContent = videoData.comments.length;
@@ -1210,8 +1200,11 @@ class VideoManager {
     }
 
     handleReaction(type, e) {
-        e.stopPropagation();
-        if (!this.userId) return;
+        if (e) e.stopPropagation();
+        if (!this.userId) {
+            this.showNotification('Войдите, чтобы ставить реакции');
+            return;
+        }
         const videoData = this.videoDataStore[this.currentVideoIndex];
         if (type === 'like') {
             if (videoData.userLikes.has(this.userId)) {
