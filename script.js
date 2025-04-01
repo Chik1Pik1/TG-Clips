@@ -1,4 +1,4 @@
-// Убедимся, что используем правильный объект из Supabase
+// Инициализация Supabase
 const supabaseUrl = 'https://seckthcbnslsropswpik.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlY2t0aGNibnNsc3JvcHN3cGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMxNzU3ODMsImV4cCI6MjA1ODc1MTc4M30.JoI03vFuRd-7sApD4dZ-zeBfUQlZrzRg7jtz0HgnJyI';
 const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
@@ -14,14 +14,14 @@ class VideoManager {
         this.userId = null;
         this.uploadedFileUrl = null;
         this.tg = window.Telegram?.WebApp;
-        this.startX = 0; // Добавляем как свойства класса
+        this.startX = 0;
         this.startY = 0;
         this.endX = 0;
         this.endY = 0;
 
         if (this.tg) {
             this.tg.ready();
-            console.log('Telegram Web App инициализирован, userId:', this.tg.initDataUnsafe?.user?.id);
+            console.log('Telegram Web App инициализирован, данные:', this.tg.initDataUnsafe);
         } else {
             console.warn('Telegram Web App SDK не загружен. Работа в режиме браузера.');
         }
@@ -29,28 +29,32 @@ class VideoManager {
         this.channels = JSON.parse(localStorage.getItem('channels')) || {};
     }
 
-async init() {
-    this.tg = window.Telegram?.WebApp;
-    if (this.tg) {
-        this.tg.ready();
-        if (this.tg.initDataUnsafe?.user) {
-            this.userId = String(this.tg.initDataUnsafe.user.id);
-            console.log('Telegram инициализирован, userId:', this.userId);
-            this.showPlayer();
+    async init() {
+        console.log('Скрипт обновлён, версия 3');
+        this.tg = window.Telegram?.WebApp;
+        if (this.tg) {
+            this.tg.ready();
+            console.log('Полные данные initDataUnsafe:', this.tg.initDataUnsafe);
+            if (this.tg.initDataUnsafe?.user) {
+                this.userId = String(this.tg.initDataUnsafe.user.id);
+                console.log('Telegram инициализирован, userId:', this.userId);
+                this.showPlayer();
+            } else {
+                console.warn('Нет данных пользователя Telegram, используем тестовый режим');
+                this.userId = 'testUser_' + Date.now();
+                console.log('Тестовый userId:', this.userId);
+                this.showPlayer();
+            }
         } else {
-            console.warn('Нет данных пользователя Telegram, используем тестовый режим');
+            console.warn('Telegram Web App не доступен, работа в режиме браузера');
             this.userId = 'testUser_' + Date.now();
-            this.showPlayer(); // Переход в плеер даже в тестовом режиме
+            console.log('Тестовый userId:', this.userId);
+            this.showPlayer();
         }
-    } else {
-        console.warn('Telegram Web App не доступен, работа в режиме браузера');
-        this.userId = 'testUser_' + Date.now();
-        this.showPlayer();
+        this.bindElements();
+        this.bindEvents();
+        await this.loadInitialVideos();
     }
-    this.bindElements();
-    this.bindEvents();
-    await this.loadInitialVideos();
-}
 
     bindElements() {
         this.authScreen = document.getElementById('authScreen');
@@ -102,10 +106,19 @@ async init() {
         this.videoUpload.accept = 'video/mp4,video/quicktime,video/webm';
         this.videoUpload.style.display = 'none';
         document.body.appendChild(this.videoUpload);
+
+        console.log('Элементы привязаны, authBtn:', this.authBtn ? 'найден' : 'не найден');
     }
 
     bindEvents() {
-        this.authBtn.addEventListener('click', () => this.handleAuth());
+        if (this.authBtn) {
+            this.authBtn.addEventListener('click', () => {
+                console.log('Клик по #authBtn зарегистрирован');
+                this.handleAuth();
+            });
+        } else {
+            console.error('Элемент #authBtn не найден при привязке событий');
+        }
         if (this.registerChannelBtn) this.bindRegisterChannelBtn();
         this.reactionButtons.forEach(btn => btn.addEventListener('click', (e) => this.handleReaction(btn.dataset.type, e)));
         this.plusBtn.addEventListener('click', (e) => this.toggleSubmenu(e));
@@ -136,6 +149,7 @@ async init() {
         document.querySelector('.drag-handle')?.addEventListener('touchstart', (e) => this.startDragging(e), { passive: false });
         document.querySelector('.fullscreen-btn')?.addEventListener('click', (e) => this.toggleFullscreen(e));
         document.addEventListener('click', (e) => this.hideManagementListOnClickOutside(e));
+        console.log('События привязаны');
     }
 
     async loadInitialVideos() {
@@ -195,6 +209,7 @@ async init() {
                 }));
             }
             this.loadVideo();
+            console.log('Видео загружены:', this.videoPlaylist);
         } catch (error) {
             console.error('Ошибка загрузки видео:', error);
             this.showNotification(`Не удалось загрузить видео: ${error.message}`);
@@ -202,28 +217,32 @@ async init() {
     }
 
     handleAuth() {
+        console.log('handleAuth вызван');
         if (this.tg?.initDataUnsafe?.user) {
             this.userId = String(this.tg.initDataUnsafe.user.id);
-            supabase.global.headers['app.user_id'] = this.userId;
             this.showNotification('Вход успешен: ' + this.userId);
             this.showPlayer();
         } else {
             this.userId = 'browserTestUser_' + Date.now();
-            supabase.global.headers['app.user_id'] = this.userId;
             this.showNotification('Имитация входа: ' + this.userId);
             this.showPlayer();
         }
     }
 
     showPlayer() {
-        this.authScreen.style.display = 'none';
-        this.playerContainer.style.display = 'flex';
-        this.initializePlayer();
-        if (this.userAvatar) {
-            console.log('Привязываем события для userAvatar');
-            this.bindUserAvatar();
+        console.log('showPlayer вызван');
+        if (this.authScreen && this.playerContainer) {
+            this.authScreen.style.display = 'none';
+            this.playerContainer.style.display = 'flex';
+            this.initializePlayer();
+            if (this.userAvatar) {
+                console.log('Привязываем события для userAvatar');
+                this.bindUserAvatar();
+            } else {
+                console.error('Элемент #userAvatar не найден после отображения playerContainer!');
+            }
         } else {
-            console.error('Элемент #userAvatar не найден после отображения playerContainer!');
+            console.error('Ошибка: authScreen или playerContainer не найдены');
         }
     }
 
@@ -242,7 +261,6 @@ async init() {
             console.log('Клик по аватару, isHolding:', this.isHolding);
             if (!this.isHolding) {
                 const channel = this.channels[this.userId];
-                console.log('userId:', this.userId, 'channel:', channel);
                 if (channel && channel.link) {
                     if (this.tg?.isVersionGte('6.0')) {
                         this.tg.openTelegramLink(channel.link);
@@ -342,7 +360,7 @@ async init() {
                 this.userAvatar.src = this.tg.initDataUnsafe.user.photo_url;
             } else {
                 console.log('Аватар из Telegram недоступен, используем заглушку');
-                this.userAvatar.src = 'https://placehold.co/40'; // Рабочая альтернатива
+                this.userAvatar.src = 'https://placehold.co/40';
             }
         } else {
             console.error('Элемент #userAvatar не найден');
@@ -350,6 +368,7 @@ async init() {
 
         this.initializeTheme();
         this.initializeTooltips();
+        console.log('Плеер инициализирован');
     }
 
     handleLoadedMetadata() {
@@ -644,7 +663,7 @@ async init() {
         videoData.comments.forEach((comment, idx) => {
             const userPhoto = (this.tg?.initDataUnsafe?.user?.id === comment.userId && this.tg?.initDataUnsafe?.user?.photo_url) 
                 ? this.tg.initDataUnsafe.user.photo_url 
-                : 'https://placehold.co/30'; // Обновлено на рабочий URL
+                : 'https://placehold.co/30';
             const username = (this.tg?.initDataUnsafe?.user?.id === comment.userId && this.tg?.initDataUnsafe?.user?.username) 
                 ? `@${this.tg.initDataUnsafe.user.username}` 
                 : `User_${comment.userId.slice(0, 5)}`;
@@ -841,7 +860,7 @@ async init() {
                 metadata: { authorId: this.userId }
             });
         if (uploadError) {
-            console.error('Ошибка загрузки:', uploadError.message, uploadError.details);
+            console.error('Ошибка загрузки:', uploadError.message);
             this.showNotification(`Ошибка загрузки: ${uploadError.message}`);
             throw uploadError;
         }
@@ -868,7 +887,7 @@ async init() {
 
         const { error: insertError } = await supabase.from('publicVideos').insert(videoData);
         if (insertError) {
-            console.error('Ошибка вставки:', insertError.message, insertError.details);
+            console.error('Ошибка вставки:', insertError.message);
             this.showNotification(`Ошибка: ${insertError.message}`);
             throw insertError;
         }
@@ -951,7 +970,7 @@ async init() {
             .eq('url', url)
             .eq('author_id', this.userId);
         if (deleteDbError) {
-            console.error('Ошибка удаления из базы:', deleteDbError.message, deleteDbError.details);
+            console.error('Ошибка удаления из базы:', deleteDbError.message);
             this.showNotification(`Ошибка: ${deleteDbError.message}`);
             throw deleteDbError;
         }
@@ -961,7 +980,7 @@ async init() {
             .from('videos')
             .remove([fileName]);
         if (deleteStorageError) {
-            console.error('Ошибка удаления из Storage:', deleteStorageError.message, deleteStorageError.details);
+            console.error('Ошибка удаления из Storage:', deleteStorageError.message);
             this.showNotification(`Ошибка: ${deleteStorageError.message}`);
             throw deleteStorageError;
         }
@@ -1393,5 +1412,10 @@ async init() {
 
 document.addEventListener('DOMContentLoaded', async () => {
     const videoManager = new VideoManager();
-    await videoManager.init();
+    try {
+        await videoManager.init();
+        console.log('VideoManager успешно инициализирован');
+    } catch (error) {
+        console.error('Ошибка инициализации VideoManager:', error);
+    }
 });
