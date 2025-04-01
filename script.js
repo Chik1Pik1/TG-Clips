@@ -20,11 +20,10 @@ class VideoManager {
         this.userId = null;
         this.uploadedFileUrl = null;
         this.tg = window.Telegram?.WebApp;
-        this.startX = 0;
+        this.startX = 0; // Добавляем как свойства класса
         this.startY = 0;
         this.endX = 0;
         this.endY = 0;
-        this.isSwiping = false;
 
         if (this.tg) {
             this.tg.ready();
@@ -39,13 +38,11 @@ class VideoManager {
     async init() {
         this.tg = window.Telegram?.WebApp;
         if (this.tg) {
-            console.log('Telegram Web App инициализирован:', this.tg);
             this.tg.ready();
-            this.tg.expand();
             if (this.tg.initDataUnsafe?.user) {
                 this.userId = String(this.tg.initDataUnsafe.user.id);
                 supabase.global.headers['app.user_id'] = this.userId;
-                console.log('Авторизация через Telegram, userId:', this.userId);
+                console.log('Telegram инициализирован, userId:', this.userId);
                 this.showPlayer();
             } else {
                 console.warn('Нет данных пользователя Telegram, используем тестовый режим');
@@ -117,39 +114,8 @@ class VideoManager {
     }
 
     bindEvents() {
-        if (this.authBtn) {
-            this.authBtn.addEventListener('click', () => this.handleAuth());
-            this.authBtn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                console.log('Touchstart на кнопке входа');
-                this.handleAuth();
-            }, { passive: false });
-        } else {
-            console.error('Кнопка #authBtn не найдена в DOM');
-        }
-
-        if (this.registerChannelBtn) {
-            this.registerChannelBtn.addEventListener('click', () => this.registerChannel());
-            this.registerChannelBtn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                console.log('Touchstart на кнопке регистрации');
-                this.registerChannel();
-            }, { passive: false });
-        } else {
-            console.error('Кнопка #registerChannelBtn не найдена в DOM');
-        }
-
-        if (this.swipeArea) {
-            this.swipeArea.addEventListener('touchstart', (e) => this.handleTouchStart(e));
-            this.swipeArea.addEventListener('touchmove', this.throttle((e) => this.handleTouchMove(e), 16));
-            this.swipeArea.addEventListener('touchend', (e) => this.handleTouchEnd(e));
-            this.swipeArea.addEventListener('mousedown', (e) => this.handleMouseStart(e));
-            this.swipeArea.addEventListener('mousemove', this.throttle((e) => this.handleMouseMove(e), 16));
-            this.swipeArea.addEventListener('mouseup', (e) => this.handleMouseEnd(e));
-        } else {
-            console.error('Элемент #swipeArea не найден в DOM');
-        }
-
+        this.authBtn.addEventListener('click', () => this.handleAuth());
+        if (this.registerChannelBtn) this.bindRegisterChannelBtn();
         this.reactionButtons.forEach(btn => btn.addEventListener('click', (e) => this.handleReaction(btn.dataset.type, e)));
         this.plusBtn.addEventListener('click', (e) => this.toggleSubmenu(e));
         this.uploadBtn.addEventListener('click', (e) => this.downloadCurrentVideo(e));
@@ -160,6 +126,7 @@ class VideoManager {
         this.video.addEventListener('ended', () => this.handleEnded());
         this.video.addEventListener('timeupdate', () => this.handleTimeUpdate());
         this.progressRange.addEventListener('input', (e) => this.handleProgressInput(e));
+        this.setupSwipeAndMouseEvents();
         this.sendCommentBtn.addEventListener('click', () => this.addComment());
         this.commentInput.addEventListener('keypress', (e) => e.key === 'Enter' && this.addComment());
         this.submenuUpload.addEventListener('click', (e) => this.handleSubmenuUpload(e));
@@ -244,7 +211,6 @@ class VideoManager {
     }
 
     handleAuth() {
-        console.log('handleAuth вызван');
         if (this.tg?.initDataUnsafe?.user) {
             this.userId = String(this.tg.initDataUnsafe.user.id);
             supabase.global.headers['app.user_id'] = this.userId;
@@ -268,6 +234,10 @@ class VideoManager {
         } else {
             console.error('Элемент #userAvatar не найден после отображения playerContainer!');
         }
+    }
+
+    bindRegisterChannelBtn() {
+        this.registerChannelBtn.addEventListener('click', () => this.registerChannel());
     }
 
     bindUserAvatar() {
@@ -381,7 +351,7 @@ class VideoManager {
                 this.userAvatar.src = this.tg.initDataUnsafe.user.photo_url;
             } else {
                 console.log('Аватар из Telegram недоступен, используем заглушку');
-                this.userAvatar.src = 'https://placehold.co/40';
+                this.userAvatar.src = 'https://placehold.co/40'; // Рабочая альтернатива
             }
         } else {
             console.error('Элемент #userAvatar не найден');
@@ -451,81 +421,55 @@ class VideoManager {
         this.updateVideoCache(this.currentVideoIndex);
     }
 
-    handleTouchStart(e) {
+    setupSwipeAndMouseEvents() {
+        let touchTimeout;
+
+        this.swipeArea.addEventListener('touchstart', (e) => this.handleTouchStart(e, touchTimeout), { passive: false });
+        this.swipeArea.addEventListener('touchmove', this.throttle((e) => this.handleTouchMove(e), 16), { passive: false });
+        this.swipeArea.addEventListener('touchend', (e) => this.handleTouchEnd(e, touchTimeout));
+
+        this.swipeArea.addEventListener('mousedown', (e) => this.handleMouseStart(e, touchTimeout));
+        this.swipeArea.addEventListener('mousemove', this.throttle((e) => this.handleMouseMove(e), 16));
+        this.swipeArea.addEventListener('mouseup', (e) => this.handleMouseEnd(e));
+    }
+
+    handleTouchStart(e, touchTimeout) {
         e.preventDefault();
-        const touch = e.touches[0];
-        this.startX = touch.clientX;
-        this.startY = touch.clientY;
-        this.isSwiping = true;
+        this.startX = e.touches[0].clientX;
+        this.startY = e.touches[0].clientY;
+        touchTimeout = setTimeout(() => this.toggleVideoPlayback(), 200);
+        this.isSwiping = false;
     }
 
     handleTouchMove(e) {
-        if (!this.isSwiping) return;
-        const touch = e.touches[0];
-        this.endX = touch.clientX;
-        this.endY = touch.clientY;
-    }
-
-    handleTouchEnd(e) {
-        if (!this.isSwiping) return;
-        this.isSwiping = false;
-
+        this.endX = e.touches[0].clientX;
+        this.endY = e.touches[0].clientY;
         const deltaX = this.endX - this.startX;
         const deltaY = this.endY - this.startY;
-        const swipeThresholdHorizontal = 50;
-        const swipeThresholdVertical = 20;
 
-        if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) return;
-
-        if (!this.userId) return;
-
-        if (Math.abs(deltaX) > swipeThresholdHorizontal && Math.abs(deltaX) > Math.abs(deltaY)) {
-            if (deltaX > 0) {
-                console.log('Swipe Right');
-                this.playNextVideo();
-            } else {
-                console.log('Swipe Left');
-                this.playPreviousVideo();
-            }
-            if (this.isProgressBarActivated) this.progressBar.classList.remove('visible');
-            this.isProgressBarActivated = false;
-        } else if (Math.abs(deltaY) > swipeThresholdVertical) {
-            if (deltaY < 0) {
-                console.log('Swipe Up');
-                this.handleReaction('like');
-                this.showFloatingReaction('like', this.endX, this.startY);
-            } else {
-                console.log('Swipe Down');
-                this.handleReaction('dislike');
-                this.showFloatingReaction('dislike', this.endX, this.startY);
-            }
+        if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
+            clearTimeout(touchTimeout);
+            this.isSwiping = true;
         }
     }
 
-    handleMouseStart(e) {
-        e.preventDefault();
-        this.isDragging = true;
-        this.startX = e.clientX;
-        this.startY = e.clientY;
-    }
-
-    handleMouseMove(e) {
-        if (!this.isDragging) return;
-        this.endX = e.clientX;
-        this.endY = e.clientY;
-    }
-
-    handleMouseEnd(e) {
-        if (!this.isDragging) return;
-        this.isDragging = false;
+    handleTouchEnd(e, touchTimeout) {
         const deltaX = this.endX - this.startX;
         const deltaY = this.endY - this.startY;
         const swipeThresholdHorizontal = 50;
         const swipeThresholdVertical = 20;
 
-        if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) return;
+        if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+            this.isSwiping = false;
+            return;
+        }
 
-        if (!this.userId) return;
+        clearTimeout(touchTimeout);
+
+        if (!this.userId) {
+            this.isSwiping = false;
+            return;
+        }
 
         if (Math.abs(deltaX) > swipeThresholdHorizontal && Math.abs(deltaX) > Math.abs(deltaY)) {
             if (deltaX > 0) this.playNextVideo();
@@ -541,6 +485,65 @@ class VideoManager {
                 this.showFloatingReaction('dislike', this.endX, this.startY);
             }
         }
+        this.isSwiping = false;
+    }
+
+    handleMouseStart(e, touchTimeout) {
+        e.preventDefault();
+        this.isDragging = true;
+        this.startX = e.clientX;
+        this.startY = e.clientY;
+        touchTimeout = setTimeout(() => this.toggleVideoPlayback(), 200);
+        this.isSwiping = false;
+    }
+
+    handleMouseMove(e) {
+        if (!this.isDragging) return;
+        this.endX = e.clientX;
+        this.endY = e.clientY;
+        const deltaX = this.endX - this.startX;
+        const deltaY = this.endY - this.startY;
+        if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
+            clearTimeout(touchTimeout);
+            this.isSwiping = true;
+        }
+    }
+
+    handleMouseEnd(e) {
+        if (!this.isDragging) return;
+        this.isDragging = false;
+        const deltaX = this.endX - this.startX;
+        const deltaY = this.endY - this.startY;
+        const swipeThresholdHorizontal = 50;
+        const swipeThresholdVertical = 20;
+
+        if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+            this.isSwiping = false;
+            return;
+        }
+
+        clearTimeout(touchTimeout);
+
+        if (!this.userId) {
+            this.isSwiping = false;
+            return;
+        }
+
+        if (Math.abs(deltaX) > swipeThresholdHorizontal && Math.abs(deltaX) > Math.abs(deltaY)) {
+            if (deltaX > 0) this.playNextVideo();
+            else this.playPreviousVideo();
+            if (this.isProgressBarActivated) this.progressBar.classList.remove('visible');
+            this.isProgressBarActivated = false;
+        } else if (Math.abs(deltaY) > swipeThresholdVertical) {
+            if (deltaY < 0) {
+                this.handleReaction('like');
+                this.showFloatingReaction('like', this.endX, this.startY);
+            } else {
+                this.handleReaction('dislike');
+                this.showFloatingReaction('dislike', this.endX, this.startY);
+            }
+        }
+        this.isSwiping = false;
     }
 
     showFloatingReaction(type, x, y) {
@@ -650,7 +653,7 @@ class VideoManager {
         videoData.comments.forEach((comment, idx) => {
             const userPhoto = (this.tg?.initDataUnsafe?.user?.id === comment.userId && this.tg?.initDataUnsafe?.user?.photo_url) 
                 ? this.tg.initDataUnsafe.user.photo_url 
-                : 'https://placehold.co/30';
+                : 'https://placehold.co/30'; // Обновлено на рабочий URL
             const username = (this.tg?.initDataUnsafe?.user?.id === comment.userId && this.tg?.initDataUnsafe?.user?.username) 
                 ? `@${this.tg.initDataUnsafe.user.username}` 
                 : `User_${comment.userId.slice(0, 5)}`;
