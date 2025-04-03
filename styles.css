@@ -46,8 +46,9 @@ body {
     font-family: Arial, sans-serif;
     background: var(--background-color);
     color: var(--text-color);
-    overflow: hidden;
+    overflow-x: hidden;
     -webkit-tap-highlight-color: transparent;
+    -moz-tap-highlight-color: transparent;
 }
 
 .auth-screen {
@@ -55,10 +56,11 @@ body {
     justify-content: center;
     align-items: center;
     width: 100%;
-    height: 100vh; /* Изменено на vh для точности */
+    height: 100vh;
+    background: #1a73e8;
     background: linear-gradient(135deg, #1a73e8, #34c0eb);
     animation: gradientShift 10s ease infinite;
-    overflow-y: auto; /* Разрешена прокрутка при необходимости */
+    overflow-y: auto;
 }
 
 @keyframes gradientShift {
@@ -69,22 +71,22 @@ body {
 
 .auth-container {
     background: rgba(255, 255, 255, 0.95);
-    padding: 40px;
+    padding: clamp(20px, 5vw, 40px);
     border-radius: 20px;
     text-align: center;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
     animation: fadeInUp 0.5s ease forwards;
     max-width: 90%;
-    width: 400px;
+    width: clamp(300px, 80vw, 400px);
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     min-height: 200px;
-    max-height: 90vh; /* Ограничение высоты */
-    overflow-y: auto; /* Прокрутка внутри контейнера */
-    opacity: 1; /* Явное финальное состояние */
-    transform: translateY(0); /* Явное финальное состояние */
+    max-height: 90vh;
+    overflow-y: auto;
+    opacity: 1;
+    transform: translateY(0);
 }
 
 @keyframes fadeInUp {
@@ -118,21 +120,21 @@ body {
 }
 
 .auth-btn {
-    padding: 15px 30px;
+    padding: clamp(10px, 2vw, 15px) clamp(20px, 4vw, 30px);
     background: #0088cc;
     color: #fff;
     border: none;
     border-radius: 25px;
-    font-size: 18px;
+    font-size: clamp(16px, 3vw, 18px);
     cursor: pointer;
-    transition: background 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease; /* Ограниченный transition */
+    transition: all 0.3s ease;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 10px;
     box-shadow: 0 5px 15px rgba(0, 136, 204, 0.3);
     position: relative;
-    z-index: 1000; /* Увеличен z-index */
+    z-index: 1000;
 }
 
 .auth-btn:hover {
@@ -269,7 +271,9 @@ body {
     pointer-events: auto;
 }
 
-.bottom-buttons, .reaction-bar, .toggle-reaction-bar {
+.bottom-buttons,
+.reaction-bar,
+.toggle-reaction-bar {
     pointer-events: auto;
 }
 
@@ -350,7 +354,7 @@ body {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-.reaction-bar.visible + .toggle-reaction-bar {
+.reaction-bar.visible+.toggle-reaction-bar {
     right: calc(15vw + 2vw);
     background: var(--reaction-hover-bg);
 }
@@ -382,7 +386,8 @@ body {
     min-width: 180px;
 }
 
-#userAvatar, #playerAvatar {
+#userAvatar,
+#playerAvatar {
     width: 40px;
     height: 40px;
     border-radius: 50%;
@@ -391,7 +396,8 @@ body {
     transition: transform 0.3s ease;
 }
 
-#userAvatar:hover, #playerAvatar:hover {
+#userAvatar:hover,
+#playerAvatar:hover {
     transform: scale(1.1);
 }
 
@@ -1022,19 +1028,27 @@ body:not(.dark) #videoDescriptionDisplay {
     background: var(--button-hover-bg);
 }
 
-.close-chat {
-    margin-top: 3vw;
-    padding: 2vw 4vw;
-    background: #ccc;
-    color: #000;
+.fullscreen-btn {
+    position: absolute;
+    bottom: 2vh;
+    right: 1vw;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
     border: none;
-    border-radius: 5px;
     cursor: pointer;
-    transition: background 0.3s;
+    font-size: 18px;
+    font-family: "Font Awesome 6 Free";
+    transition: all 0.3s ease;
+    z-index: 101;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-.close-chat:hover {
-    background: #aaa;
+.fullscreen-btn:hover {
+    background: rgba(0, 0, 0, 0.7);
+    transform: scale(1.1);
 }
 
 .share-modal {
@@ -1070,15 +1084,18 @@ body:not(.dark) #videoDescriptionDisplay {
     color: var(--text-color);
 }
 
-.share-modal-content button {
-    display: block;
-    width: 100%;
-    padding: 2vw;
-    margin: 2vw 0;
+.share-actions {
+    display: flex;
+    gap: 2vw;
+    justify-content: center;
+}
+
+.share-actions button {
+    padding: 2vw 4vw;
     border: none;
     border-radius: 5px;
-    font-size: clamp(14px, 4vw, 16px);
     cursor: pointer;
+    font-size: clamp(14px, 4vw, 16px);
     transition: background 0.3s;
 }
 
@@ -1092,46 +1109,22 @@ body:not(.dark) #videoDescriptionDisplay {
 }
 
 #copyLink {
-    background: var(--button-bg);
-    color: #fff;
-}
-
-#copyLink:hover {
-    background: var(--button-hover-bg);
-}
-
-.close-share {
     background: #ccc;
     color: #000;
 }
 
-.close-share:hover {
+#copyLink:hover {
     background: #aaa;
 }
 
-.video-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: #fff;
-    margin-bottom: 10px;
-}
-
-.video-item span {
-    flex: 1;
-}
-
-.video-item button {
-    padding: 5px 10px;
-    background: var(--button-bg);
-    color: #fff;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-}
-
-.video-item button:hover {
-    background: var(--button-hover-bg);
+@media (max-width: 600px) {
+    .auth-container {
+        padding: clamp(15px, 4vw, 30px);
+    }
+    .auth-btn {
+        padding: clamp(8px, 1.5vw, 12px) clamp(15px, 3vw, 25px);
+        font-size: clamp(14px, 2.5vw, 16px);
+    }
 }
 
 @media (max-width: 400px) {
@@ -1147,7 +1140,8 @@ body:not(.dark) #videoDescriptionDisplay {
         padding: 6px 10px;
         min-width: 160px;
     }
-    #userAvatar, #playerAvatar {
+    #userAvatar,
+    #playerAvatar {
         width: 35px;
         height: 35px;
     }
@@ -1189,7 +1183,6 @@ body:not(.dark) #videoDescriptionDisplay {
         bottom: 2vh;
         right: 1vw;
     }
-    /* Добавлены адаптивные стили для кнопок авторизации */
     .auth-btn {
         padding: 10px 20px;
         font-size: 16px;
@@ -1198,243 +1191,4 @@ body:not(.dark) #videoDescriptionDisplay {
         padding: 8px 15px;
         font-size: 14px;
     }
-}
-
-.fullscreen-btn {
-    position: absolute;
-    bottom: 3vh;
-    right: 2vw;
-    width: 45px;
-    height: 45px;
-    border-radius: 50%;
-    background: var(--reaction-bg);
-    color: #fff;
-    font-size: 18px;
-    font-family: "Font Awesome 6 Free";
-    border: none;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-    z-index: 102;
-}
-
-.fullscreen-btn:hover {
-    background: var(--reaction-hover-bg);
-    transform: scale(1.1) translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
-}
-
-.fullscreen-mode .container {
-    height: 100vh !important;
-    width: 100vw !important;
-    position: fixed;
-    top: 0;
-    left: 0;
-    z-index: 9999;
-}
-
-.fullscreen-mode .video-wrapper {
-    height: 100vh !important;
-}
-
-#userAvatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: transform 0.2s ease;
-}
-
-#userAvatar:hover {
-    transform: scale(1.1);
-}
-
-#userAvatar:active {
-    transform: scale(0.95);
-}
-
-#userAvatar.holding {
-    transform: scale(1.05);
-    opacity: 0.8;
-}
-
-#videoManagementList {
-    position: absolute;
-    bottom: 6vh;
-    left: 2vw;
-    background: rgba(0, 0, 0, 0.8);
-    padding: 10px;
-    border-radius: 10px;
-    z-index: 100;
-    display: none;
-    transform: translateY(10px);
-    opacity: 0;
-    transition: transform 0.3s ease, opacity 0.3s ease;
-}
-
-#videoManagementList.visible {
-    display: block;
-    transform: translateY(0);
-    opacity: 1;
-}
-
-#videoManagementList::before {
-    content: '';
-    position: absolute;
-    bottom: -10px;
-    left: 20px;
-    width: 0;
-    height: 0;
-    border-left: 10px solid transparent;
-    border-right: 10px solid transparent;
-    border-top: 10px solid rgba(0, 0, 0, 0.8);
-    z-index: 101;
-}
-
-.close-list-btn {
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    background: none;
-    border: none;
-    color: #fff;
-    font-size: 1rem;
-    cursor: pointer;
-    padding: 0;
-}
-
-html, body {
-    height: 100%;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-}
-
-#authScreen {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: #fff;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 10;
-}
-
-#playerContainer {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: none;
-    z-index: 5;
-}
-
-.register-channel-btn {
-    padding: 12px 25px;
-    background: #34c0eb;
-    color: #fff;
-    border: none;
-    border-radius: 25px;
-    font-size: 16px;
-    cursor: pointer;
-    transition: background 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease; /* Ограниченный transition */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    box-shadow: 0 5px 15px rgba(0, 136, 204, 0.3);
-    margin-top: 15px;
-    position: relative;
-    z-index: 1000; /* Увеличен z-index */
-}
-
-.register-channel-btn:hover {
-    background: #2a9fd6;
-    transform: translateY(-2px);
-    box-shadow: 0 7px 20px rgba(0, 136, 204, 0.5);
-}
-
-.register-channel-btn:active {
-    transform: translateY(0);
-    box-shadow: 0 3px 10px rgba(0, 136, 204, 0.2);
-}
-
-.auth-btn, .register-channel-btn {
-    pointer-events: auto;
-    opacity: 1;
-}
-
-body.telegram-fullscreen {
-    height: 100% !important;
-    width: 100% !important;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-}
-
-.telegram-fullscreen .container,
-.telegram-fullscreen .video-wrapper,
-.telegram-fullscreen #videoPlayer {
-    height: 100% !important;
-    width: 100% !important;
-}
-
-.comment-avatar {
-    cursor: pointer;
-    transition: transform 0.2s ease;
-}
-
-.comment-avatar:hover {
-    transform: scale(1.1);
-}
-
-.delete-comment-btn {
-    background: #ff4444;
-    color: #fff;
-    border: none;
-    padding: 5px 10px;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 12px;
-    margin-left: 10px;
-}
-
-.delete-comment-btn:hover {
-    background: #cc0000;
-}
-
-.comment-content {
-    display: flex;
-    flex-direction: column;
-}
-
-.comment-username {
-    font-size: 12px;
-    color: #ccc;
-    margin-bottom: 5px;
-}
-
-@media (fullscreen) {
-    #rating {
-        top: 8vh;
-        left: 2vw;
-    }
-    #viewCount {
-        top: 8vh;
-        right: 2vw;
-    }
-}
-
-body.telegram-fullscreen #rating {
-    top: 8vh;
-    left: 2vw;
-}
-
-body.telegram-fullscreen #viewCount {
-    top: 8vh;
-    right: 2vw;
 }
