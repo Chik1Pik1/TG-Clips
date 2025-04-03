@@ -2,164 +2,128 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Platform</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TG Clips</title>
+    <!-- Telegram Web App SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Стили -->
     <link rel="stylesheet" href="styles.css">
+    <!-- Font Awesome для иконок -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 </head>
 <body>
     <!-- Экран авторизации -->
-    <div id="authScreen" class="auth-screen">
+    <section class="auth-screen" id="authScreen">
         <div class="auth-container">
-            <div class="auth-logo"><i class="fas fa-video"></i></div>
-            <h1>Добро пожаловать</h1>
-            <p>Войдите через Telegram или как гость</p>
-            <button id="authBtn" class="auth-btn">
+            <div class="auth-logo">
+                <i class="fas fa-play-circle"></i>
+            </div>
+            <h1>Добро пожаловать!</h1>
+            <p>Войдите через Telegram, чтобы начать просмотр</p>
+            <button class="auth-btn" id="authBtn">
                 <i class="fab fa-telegram-plane"></i> Войти через Telegram
             </button>
-            <button id="registerChannelBtn" class="register-channel-btn auth-btn" style="margin-top: 20px;">
-                Зарегистрировать канал
+            <button class="register-channel-btn" id="registerChannelBtn">
+                <i class="fas fa-plus-circle"></i> Зарегистрировать канал
             </button>
         </div>
-    </div>
+    </section>
 
-    <!-- Основной контейнер плеера -->
-    <div id="playerContainer" class="container">
-        <div class="video-wrapper">
-            <video id="videoPlayer" playsinline>
-                <source id="videoSource" src="" type="video/mp4">
-            </video>
-        </div>
-
-        <!-- Верхняя панель -->
-        <div class="top-bar">
-            <div id="rating">★ 0.0</div>
+    <!-- Основной контейнер -->
+    <main class="container" id="playerContainer" style="display: none;">
+        <header class="top-bar">
+            <div class="rating" id="rating">★★★★★</div>
             <div class="view-count"><i class="fas fa-eye"></i> <span id="viewCount">0</span></div>
-        </div>
+        </header>
 
-        <!-- Область свайпов -->
-        <div id="swipeArea" class="swipe-area"></div>
+        <section class="video-wrapper">
+             <video class="player" id="videoPlayer">
+             <!-- Удалите статичный source -->
+                <source id="videoSource" type="video/mp4">
+             </video>
+            <div class="swipe-area" id="swipeArea"></div>
+            <div class="reaction-animation" id="reactionAnimation"></div>
+            <div class="progress-bar" id="progressBar">
+                <input type="range" id="progressRange" min="0" value="0" step="0.1">
+            </div>
+        </section>
 
-        <!-- Панель реакций -->
-        <div id="reactionBar" class="reaction-bar">
-            <button class="reaction-btn" data-type="like">
-                <span>👍</span>
-                <small id="likeCount">0</small>
-            </button>
-            <button class="reaction-btn" data-type="dislike">
-                <span>👎</span>
-                <small id="dislikeCount">0</small>
-            </button>
-            <button class="reaction-btn" data-type="comment">
-                <span>💬</span>
-                <small id="commentCount">0</small>
-            </button>
-            <button class="reaction-btn" data-type="share">
-                <span>📤</span>
-                <small id="shareCount">0</small>
-            </button>
-            <button class="theme-toggle">
-                <span>🌙</span>
-            </button>
-        </div>
-        <button class="toggle-reaction-bar"><i class="fas fa-arrow-left"></i></button>
+        <aside class="reaction-bar" id="reactionBar">
+            <button class="reaction-btn" data-type="like"><span><i class="fas fa-thumbs-up"></i></span><small id="likeCount">0</small></button>
+            <button class="reaction-btn" data-type="dislike"><span><i class="fas fa-thumbs-down"></i></span><small id="dislikeCount">0</small></button>
+            <button class="reaction-btn" data-type="comment"><span><i class="fas fa-comment"></i></span><small id="commentCount">0</small></button>
+            <button class="reaction-btn" data-type="share"><span><i class="fas fa-share"></i></span><small id="shareCount">0</small></button>
+            <button class="theme-toggle"><i class="fas fa-moon"></i></button>
+        </aside>
 
-        <!-- Нижняя панель -->
-        <div class="bottom-buttons">
-            <img id="userAvatar" src="https://placehold.co/30" alt="User Avatar">
+        <button class="toggle-reaction-bar"><i class="fas fa-arrow-right"></i></button>
+
+        <footer class="bottom-buttons">
+            <img src="https://via.placeholder.com/30" alt="User" class="user-icon" id="userAvatar">
             <button class="plus-btn"><i class="fas fa-plus"></i></button>
-            <img id="playerAvatar" src="https://placehold.co/30" alt="Player Avatar">
-            <button class="upload-btn"><i class="fas fa-download"></i></button>
-        </div>
-
-        <!-- Подменю -->
-        <div id="uploadVideo" class="submenu upload">
-            <i class="fas fa-upload"></i> Загрузить
-        </div>
-        <div id="chatAuthor" class="submenu chat">
-            <i class="fas fa-comment"></i> Чат
-        </div>
-
-        <!-- Анимация реакций -->
-        <div id="reactionAnimation" class="reaction-animation"></div>
-
-        <!-- Полоса прогресса -->
-        <div id="progressBar" class="progress-bar">
-            <input type="range" id="progressRange" min="0" value="0" step="0.1">
-        </div>
-
-        <!-- Описание видео -->
-        <div id="videoDescriptionDisplay"></div>
-        <div class="bottom-bar-overlay"></div>
-
-        <!-- Окно комментариев -->
-        <div id="commentsWindow" class="comments-window">
-            <div class="drag-handle"></div>
-            <div id="commentsList" class="comments-list"></div>
-            <div class="comment-input">
-                <input id="commentInput" type="text" placeholder="Напишите комментарий...">
-                <button id="sendComment"><i class="fas fa-paper-plane"></i></button>
-            </div>
-        </div>
-
-        <!-- Модальное окно загрузки -->
-        <div id="uploadModal" class="upload-modal">
-            <div class="upload-modal-content">
-                <h2>Загрузка видео</h2>
-                <div class="upload-progress">
-                    <div id="progressBarInner" class="progress-bar-inner"></div>
-                </div>
-                <video id="uploadPreview" controls></video>
-                <textarea id="videoDescription" placeholder="Описание видео..."></textarea>
-                <div class="upload-actions">
-                    <button id="publishBtn">Опубликовать</button>
-                    <button id="cancelBtn">Отмена</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Модальное окно чата -->
-        <div id="chatModal" class="chat-modal">
-            <div class="chat-modal-content">
-                <h2>Чат с автором</h2>
-                <div id="chatMessages" class="chat-messages"></div>
-                <div class="chat-input">
-                    <input id="chatInput" type="text" placeholder="Сообщение...">
-                    <button id="sendChatMessage"><i class="fas fa-paper-plane"></i></button>
-                </div>
-                <button id="closeChat" style="margin-top: 10px;">Закрыть</button>
-            </div>
-        </div>
-
-        <!-- Модальное окно шаринга -->
-        <div id="shareModal" class="share-modal">
-            <div class="share-modal-content">
-                <h2>Поделиться видео</h2>
-                <div class="share-actions">
-                    <button id="shareTelegram"><i class="fab fa-telegram-plane"></i> Telegram</button>
-                    <button id="copyLink"><i class="fas fa-link"></i> Скопировать ссылку</button>
-                </div>
-                <button id="closeShare" style="margin-top: 10px;">Закрыть</button>
-            </div>
-        </div>
+            <button class="upload-btn"><i class="fas fa-upload"></i></button>
+        </footer>
 
         <!-- Кнопка полноэкранного режима -->
         <button class="fullscreen-btn"><i class="fas fa-expand"></i></button>
 
-        <!-- Подсказки -->
-        <div id="tooltipSwipe" class="tooltip">Свайпайте для переключения видео</div>
-        <div id="tooltipReactions" class="tooltip">Реакции здесь</div>
-        <div id="tooltipUpload" class="tooltip">Загрузка и чат</div>
-        <div id="tooltipTheme" class="tooltip">Смена темы</div>
-    </div>
+        <div class="submenu upload" id="uploadVideo"><i class="fas fa-upload"></i> Загрузить</div>
+        <div class="submenu chat" id="chatAuthor"><i class="fas fa-comment"></i> Чат</div>
+
+        <section class="comments-window" id="commentsWindow">
+            <div class="drag-handle"></div>
+            <div class="comments-list" id="commentsList"></div>
+            <div class="comment-input">
+                <input type="text" id="commentInput" placeholder="Напишите комментарий...">
+                <button id="sendComment">Отправить</button>
+            </div>
+        </section>
+
+        <div class="tooltip" id="tooltipSwipe" data-target="swipeArea">Свайпай влево/вправо для смены видео, вверх/вниз для лайка/дизлайка</div>
+        <div class="tooltip" id="tooltipReactions" data-target="reactionBar">Ставь лайки, дизлайки, комментируй и делись!</div>
+        <div class="tooltip" id="tooltipUpload" data-target="plus-btn">Нажми, чтобы загрузить своё видео</div>
+        <div class="tooltip" id="tooltipTheme" data-target="theme-toggle">Переключи тему (светлая/тёмная)</div>
+
+        <div class="upload-modal" id="uploadModal">
+            <div class="upload-modal-content">
+                <h2>Загрузка видео</h2>
+                <div class="upload-progress" id="uploadProgress">
+                    <div class="progress-bar-inner" id="progressBarInner"></div>
+                </div>
+                <video class="upload-preview" id="uploadPreview" controls></video>
+                <!-- Поле для описания видео -->
+                <textarea id="videoDescription" placeholder="Введите описание видео"></textarea>
+                <div class="upload-actions">
+                    <button id="publishBtn">Опубликовать</button>
+                    <button id="cancelBtn">Отменить</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-modal" id="chatModal">
+            <div class="chat-modal-content">
+                <h2>Чат с автором</h2>
+                <div class="chat-messages" id="chatMessages"></div>
+                <div class="chat-input">
+                    <input type="text" id="chatInput" placeholder="Напишите сообщение...">
+                    <button id="sendChatMessage">Отправить</button>
+                </div>
+                <button class="close-chat" id="closeChat">Закрыть</button>
+            </div>
+        </div>
+
+        <div class="share-modal" id="shareModal">
+            <div class="share-modal-content">
+                <h2>Поделиться видео</h2>
+                <button id="shareTelegram">Поделиться в Telegram</button>
+                <button id="copyLink">Скопировать ссылку</button>
+                <button class="close-share" id="closeShare">Закрыть</button>
+            </div>
+        </div>
+    </main>
 
     <!-- Подключение скриптов -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js"></script>
-    <script>
-        const videoManager = new VideoManager();
-        videoManager.init();
-    </script>
+    <script src="script.js?v=5" defer></script>
 </body>
 </html>
