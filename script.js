@@ -34,7 +34,7 @@ class VideoManager {
 
         if (this.tg) {
             this.tg.ready();
-            this.tg.expand(); // Автоматическое расширение WebApp
+            this.tg.expand();
             console.log('Telegram Web App инициализирован:', this.tg.initDataUnsafe);
         } else {
             console.warn('Telegram Web App SDK не загружен. Работа в режиме браузера.');
@@ -144,15 +144,17 @@ class VideoManager {
         this.bindUserAvatar();
     }
 
+    // Исправленный метод handleAuth
     handleAuth() {
         if (this.tg?.initDataUnsafe?.user) {
             this.state.userId = String(this.tg.initDataUnsafe.user.id);
-            this.showNotification('Вход успешен: ' + this.state.userId);
+            this.showNotification('Вход выполнен: ' + this.state.userId);
+            this.showPlayer();
         } else {
-            this.state.userId = 'browserTestUser_' + Date.now();
-            this.showNotification('Имитация входа: ' + this.state.userId);
+            this.state.userId = 'browserUser_' + Date.now();
+            this.showNotification('Режим браузера: тестовый ID');
+            this.showPlayer();
         }
-        this.showPlayer();
     }
 
     showPlayer() {
@@ -165,30 +167,25 @@ class VideoManager {
         }
     }
 
+    // Исправленный метод bindUserAvatar
     bindUserAvatar() {
-        if (!this.userAvatar) {
-            console.error('Элемент #userAvatar не найден!');
-            return;
-        }
+        if (!this.userAvatar) return;
 
         this.userAvatar.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (!this.state.isHolding) {
-                const channel = this.state.channels[this.state.userId];
-                if (channel?.link) {
-                    console.log('Переход на канал:', channel.link);
-                    if (this.tg?.isVersionGte('6.0')) {
-                        this.tg.openTelegramLink(channel.link);
-                    } else {
-                        window.open(channel.link, '_blank');
-                    }
+            const channel = this.state.channels[this.state.userId];
+            if (channel?.link) {
+                if (this.tg?.isVersionGte('6.0')) {
+                    this.tg.openTelegramLink(channel.link);
                 } else {
-                    this.showNotification('Канал не зарегистрирован. Зарегистрируйте его!');
-                    this.registerChannel();
+                    window.open(channel.link, '_blank');
                 }
+            } else {
+                this.showNotification('Канал не зарегистрирован');
             }
         });
 
+        // Остальной код для удержания
         const holdDuration = 2000;
         const startHold = (e) => {
             e.preventDefault();
@@ -782,6 +779,7 @@ class VideoManager {
         };
     }
 
+    // Исправленный метод publishVideo с обработкой ошибок
     async publishVideo() {
         if (!this.state.uploadedFile) return;
 
@@ -789,60 +787,56 @@ class VideoManager {
         const fileName = `${this.state.userId}/${Date.now()}_${file.name}`;
         const description = document.getElementById('videoDescription')?.value || '';
 
-        const { data: storageData, error: uploadError } = await supabase.storage
-            .from('videos')
-            .upload(fileName, file, {
-                cacheControl: '3600',
-                upsert: false,
-                contentType: file.type
-            });
+        try {
+            const { data: storageData, error: uploadError } = await supabase.storage
+                .from('videos')
+                .upload(fileName, file, {
+                    cacheControl: '3600',
+                    upsert: false,
+                    contentType: file.type
+                });
 
-        if (uploadError) {
-            console.error('Ошибка загрузки в Storage:', uploadError.message);
-            this.showNotification(`Ошибка загрузки: ${uploadError.message}`);
-            return;
+            if (uploadError) throw uploadError;
+
+            this.state.uploadedFileUrl = supabase.storage.from('videos').getPublicUrl(fileName).data.publicUrl;
+
+            const videoData = {
+                url: this.state.uploadedFileUrl,
+                author_id: this.state.userId,
+                description,
+                timestamp: new Date().toISOString(),
+                views: [],
+                likes: 0,
+                dislikes: 0,
+                user_likes: [],
+                user_dislikes: [],
+                comments: [],
+                shares: 0,
+                view_time: 0,
+                replays: 0,
+                duration: this.uploadPreview?.duration || 0,
+                last_position: 0,
+                chat_messages: []
+            };
+
+            const { data, error: insertError } = await supabase
+                .from('publicVideos')
+                .insert(videoData)
+                .select();
+
+            if (insertError) throw insertError;
+
+            this.showNotification('Видео успешно опубликовано!');
+            this.uploadModal.classList.remove('visible');
+            this.state.uploadedFile = null;
+
+            this.state.playlist.unshift({ url: this.state.uploadedFileUrl, data: this.createEmptyVideoData(this.state.userId) });
+            this.state.currentIndex = 0;
+            this.loadVideo();
+        } catch (error) {
+            console.error('Upload error:', error);
+            this.showNotification(`Ошибка: ${error.message}`);
         }
-
-        this.state.uploadedFileUrl = supabase.storage.from('videos').getPublicUrl(fileName).data.publicUrl;
-
-        const videoData = {
-            url: this.state.uploadedFileUrl,
-            author_id: this.state.userId,
-            description,
-            timestamp: new Date().toISOString(),
-            views: [],
-            likes: 0,
-            dislikes: 0,
-            user_likes: [],
-            user_dislikes: [],
-            comments: [],
-            shares: 0,
-            view_time: 0,
-            replays: 0,
-            duration: this.uploadPreview?.duration || 0,
-            last_position: 0,
-            chat_messages: []
-        };
-
-        const { data, error: insertError } = await supabase
-            .from('publicVideos')
-            .insert(videoData)
-            .select();
-
-        if (insertError) {
-            console.error('Ошибка вставки в базу:', insertError.message);
-            this.showNotification(`Ошибка: ${insertError.message}`);
-            await supabase.storage.from('videos').remove([fileName]);
-            return;
-        }
-
-        this.showNotification('Видео успешно опубликовано!');
-        this.uploadModal.classList.remove('visible');
-        this.state.uploadedFile = null;
-
-        this.state.playlist.unshift({ url: this.state.uploadedFileUrl, data: this.createEmptyVideoData(this.state.userId) });
-        this.state.currentIndex = 0;
-        this.loadVideo();
     }
 
     cancelUpload() {
@@ -1239,7 +1233,7 @@ class VideoManager {
             this.showNotification('Не удалось скачать видео!');
         } finally {
             this.uploadBtn.classList.remove('downloading');
-            this.uploadBtn.style.set HAVProperty('--progress', '0%');
+            this.uploadBtn.style.setProperty('--progress', '0%');
         }
     }
 
@@ -1285,37 +1279,25 @@ class VideoManager {
         this.toggleSubmenu();
     }
 
+    // Исправленный метод toggleFullscreen
     toggleFullscreen(e) {
         e.stopPropagation();
-        e.preventDefault();
-
-        if (this.tg && this.tg.isVersionGte('6.1')) {
-            this.tg.requestFullscreen()
-                .then(() => {
-                    document.body.classList.add('telegram-fullscreen');
-                    this.showNotification('Полноэкранный режим включён');
-                })
-                .catch((err) => {
-                    console.error('Ошибка полноэкранного режима Telegram:', err);
-                    this.tg.expand();
-                    this.showNotification('Полноэкранный режим недоступен, использовано расширение');
-                });
-        } else if (!this.tg) {
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen()
-                    .then(() => document.body.classList.add('fullscreen-mode'))
-                    .catch(err => {
-                        console.error('Ошибка полноэкранного режима:', err);
-                        this.showNotification('Полноэкранный режим не поддерживается');
+        if (document.fullscreenElement) {
+            document.exitFullscreen();
+        } else {
+            if (this.tg?.isVersionGte('6.1')) {
+                this.tg.requestFullscreen()
+                    .then(() => {
+                        document.body.classList.add('telegram-fullscreen');
+                    })
+                    .catch(() => {
+                        document.documentElement.requestFullscreen()
+                            .catch(err => console.error('Fullscreen error:', err));
                     });
             } else {
-                document.exitFullscreen()
-                    .then(() => document.body.classList.remove('fullscreen-mode'))
-                    .catch(err => console.error('Ошибка выхода из полноэкранного режима:', err));
+                document.documentElement.requestFullscreen()
+                    .catch(err => console.error('Fullscreen error:', err));
             }
-        } else {
-            this.tg.expand();
-            this.showNotification('Полноэкранный режим недоступен в этой версии Telegram');
         }
     }
 }
