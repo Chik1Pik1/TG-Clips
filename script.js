@@ -42,7 +42,7 @@ class VideoManager {
     }
 
     async init() {
-        console.log('Скрипт обновлён, версия 8');
+        console.log('Скрипт обновлён, версия 9');
         if (this.tg?.initDataUnsafe?.user) {
             this.state.userId = String(this.tg.initDataUnsafe.user.id);
             console.log('Telegram инициализирован, userId:', this.state.userId);
@@ -55,7 +55,7 @@ class VideoManager {
         this.bindElements();
         this.bindEvents();
         await this.loadInitialVideos();
-        this.showPlayer();
+        // Не вызываем showPlayer здесь, чтобы дать пользователю войти вручную
     }
 
     bindElements() {
@@ -110,8 +110,25 @@ class VideoManager {
     }
 
     bindEvents() {
-        this.authBtn?.addEventListener('click', () => this.handleAuth());
-        this.registerChannelBtn?.addEventListener('click', () => this.registerChannel());
+        console.log('Привязка событий...');
+        if (this.authBtn) {
+            this.authBtn.addEventListener('click', () => {
+                console.log('Клик по кнопке входа');
+                this.handleAuth();
+            });
+        } else {
+            console.error('Элемент #authBtn не найден');
+        }
+
+        if (this.registerChannelBtn) {
+            this.registerChannelBtn.addEventListener('click', () => {
+                console.log('Клик по кнопке регистрации канала');
+                this.registerChannel();
+            });
+        } else {
+            console.error('Элемент #registerChannelBtn не найден');
+        }
+
         this.reactionButtons.forEach(btn => btn.addEventListener('click', (e) => this.handleReaction(btn.dataset.type, e)));
         this.plusBtn.addEventListener('click', (e) => this.toggleSubmenu(e));
         this.uploadBtn.addEventListener('click', (e) => this.downloadCurrentVideo(e));
@@ -144,7 +161,6 @@ class VideoManager {
         this.bindUserAvatar();
     }
 
-    // Исправленный метод handleAuth
     handleAuth() {
         if (this.tg?.initDataUnsafe?.user) {
             this.state.userId = String(this.tg.initDataUnsafe.user.id);
@@ -159,6 +175,7 @@ class VideoManager {
 
     showPlayer() {
         if (this.authScreen && this.playerContainer) {
+            console.log('Показ плеера');
             this.authScreen.style.display = 'none';
             this.playerContainer.style.display = 'flex';
             this.initializePlayer();
@@ -167,7 +184,6 @@ class VideoManager {
         }
     }
 
-    // Исправленный метод bindUserAvatar
     bindUserAvatar() {
         if (!this.userAvatar) return;
 
@@ -185,7 +201,6 @@ class VideoManager {
             }
         });
 
-        // Остальной код для удержания
         const holdDuration = 2000;
         const startHold = (e) => {
             e.preventDefault();
@@ -255,7 +270,7 @@ class VideoManager {
         if (this.userAvatar && this.tg?.initDataUnsafe?.user?.photo_url) {
             this.userAvatar.src = this.tg.initDataUnsafe.user.photo_url;
         } else {
-            this.userAvatar.src = 'https://placehold.co/30';
+            this.userAvatar.src = 'https://placehold.co/30'; // Исправленный URL
         }
         this.initializeTheme();
         this.initializeTooltips();
@@ -779,7 +794,6 @@ class VideoManager {
         };
     }
 
-    // Исправленный метод publishVideo с обработкой ошибок
     async publishVideo() {
         if (!this.state.uploadedFile) return;
 
@@ -1279,7 +1293,6 @@ class VideoManager {
         this.toggleSubmenu();
     }
 
-    // Исправленный метод toggleFullscreen
     toggleFullscreen(e) {
         e.stopPropagation();
         if (document.fullscreenElement) {
