@@ -240,28 +240,23 @@ class VideoManager {
         this.userAvatar.addEventListener('touchmove', stopHold, { passive: false });
     }
 
-    async registerChannel() {
+async registerChannel() {
         if (!this.state.userId) {
             this.showNotification('Пожалуйста, войдите через Telegram.');
             return;
         }
-
-        if (this.state.channels[this.state.userId]?.link) {
-            this.showNotification('Канал уже зарегистрирован!');
-            if (this.tg?.isVersionGte('6.0')) {
-                this.tg.openTelegramLink(this.state.channels[this.state.userId].link);
-            } else {
-                window.open(this.state.channels[this.state.userId].link, '_blank');
-            }
-            return;
-        }
-
         const channelLink = prompt('Введите ссылку на ваш Telegram-канал (например, https://t.me/yourchannel):');
         if (channelLink && channelLink.match(/^https:\/\/t\.me\/[a-zA-Z0-9_]+$/)) {
-            this.state.channels[this.state.userId] = { videos: [], link: channelLink };
-            localStorage.setItem('channels', JSON.stringify(this.state.channels));
             try {
-                await supabase.from('users').upsert({ telegram_id: this.state.userId, channel_link: channelLink });
+                const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/register-channel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ telegram_id: this.state.userId, channel_link: channelLink })
+                });
+                if (!response.ok) throw new Error('Ошибка сервера');
+                const result = await response.json();
+                this.state.channels[this.state.userId] = { videos: [], link: channelLink };
+                localStorage.setItem('channels', JSON.stringify(this.state.channels));
                 this.showNotification('Канал успешно зарегистрирован!');
                 if (this.authScreen.style.display !== 'none') this.showPlayer();
             } catch (error) {
@@ -283,16 +278,11 @@ class VideoManager {
         this.initializeTooltips();
     }
 
-    async loadInitialVideos() {
+async loadInitialVideos() {
         try {
-            const { data, error } = await supabase
-                .from('publicVideos')
-                .select('*')
-                .order('timestamp', { ascending: false })
-                .limit(10);
-
-            if (error) throw error;
-
+            const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/public-videos');
+            if (!response.ok) throw new Error('Ошибка сервера');
+            const data = await response.json();
             this.state.playlist = data?.map(video => ({
                 url: video.url,
                 data: {
