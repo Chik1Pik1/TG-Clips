@@ -1,9 +1,3 @@
-// Инициализация Supabase (без ключа на фронтенде, предполагается серверная авторизация)
-const supabaseUrl = 'https://seckthcbnslsropswpik.supabase.co';
-const supabase = window.supabase.createClient(supabaseUrl, null, {
-    auth: { autoRefreshToken: false, persistSession: false }
-});
-
 class VideoManager {
     constructor() {
         this.state = {
