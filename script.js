@@ -28,7 +28,7 @@ class VideoManager {
 
         if (this.tg) {
             this.tg.ready();
-            this.tg.expand(); // Автоматическое расширение WebApp
+            this.tg.expand();
             console.log('Telegram Web App инициализирован:', this.tg.initDataUnsafe);
         } else {
             console.warn('Telegram Web App SDK не загружен. Работа в режиме браузера.');
@@ -36,7 +36,7 @@ class VideoManager {
     }
 
     async init() {
-        console.log('Скрипт обновлён, версия 8');
+        console.log('Скрипт обновлён, версия 9');
         if (this.tg?.initDataUnsafe?.user) {
             this.state.userId = String(this.tg.initDataUnsafe.user.id);
             console.log('Telegram инициализирован, userId:', this.state.userId);
@@ -47,9 +47,9 @@ class VideoManager {
         console.log('Зарегистрированные каналы:', this.state.channels);
 
         this.bindElements();
-        this.showPlayer(); // Сначала показываем плеер, как в старой версии
-        this.bindEvents(); // Затем привязываем события
+        this.bindEvents();
         await this.loadInitialVideos();
+        this.showPlayer(); // Показываем плеер после успешной загрузки видео
     }
 
     bindElements() {
@@ -109,16 +109,7 @@ class VideoManager {
                 btn.addEventListener('click', handler);
                 console.log(`${name} привязан`);
             } else {
-                console.warn(`${name} не найден, ждём появления...`);
-                const observer = new MutationObserver(() => {
-                    const element = document.getElementById(btn === this.authBtn ? 'authBtn' : 'registerChannelBtn');
-                    if (element) {
-                        element.addEventListener('click', handler);
-                        console.log(`${name} найден и привязан`);
-                        observer.disconnect();
-                    }
-                });
-                observer.observe(document.body, { childList: true, subtree: true });
+                console.warn(`${name} не найден`);
             }
         };
 
@@ -126,30 +117,30 @@ class VideoManager {
         bindButton(this.registerChannelBtn, () => this.registerChannel(), '#registerChannelBtn');
 
         this.reactionButtons.forEach(btn => btn.addEventListener('click', (e) => this.handleReaction(btn.dataset.type, e)));
-        this.plusBtn.addEventListener('click', (e) => this.toggleSubmenu(e));
-        this.uploadBtn.addEventListener('click', (e) => this.downloadCurrentVideo(e));
-        this.toggleReactionBar.addEventListener('click', (e) => this.toggleReactionBarVisibility(e));
-        this.video.addEventListener('loadedmetadata', () => this.handleLoadedMetadata(), { once: true });
-        this.video.addEventListener('play', () => this.handlePlay());
-        this.video.addEventListener('pause', () => this.handlePause());
-        this.video.addEventListener('ended', () => this.handleEnded());
-        this.video.addEventListener('timeupdate', () => this.handleTimeUpdate());
-        this.progressRange.addEventListener('input', (e) => this.handleProgressInput(e));
+        this.plusBtn?.addEventListener('click', (e) => this.toggleSubmenu(e));
+        this.uploadBtn?.addEventListener('click', (e) => this.downloadCurrentVideo(e));
+        this.toggleReactionBar?.addEventListener('click', (e) => this.toggleReactionBarVisibility(e));
+        this.video?.addEventListener('loadedmetadata', () => this.handleLoadedMetadata(), { once: true });
+        this.video?.addEventListener('play', () => this.handlePlay());
+        this.video?.addEventListener('pause', () => this.handlePause());
+        this.video?.addEventListener('ended', () => this.handleEnded());
+        this.video?.addEventListener('timeupdate', () => this.handleTimeUpdate());
+        this.progressRange?.addEventListener('input', (e) => this.handleProgressInput(e));
         this.setupSwipeAndMouseEvents();
-        this.sendCommentBtn.addEventListener('click', () => this.addComment());
-        this.commentInput.addEventListener('keypress', (e) => e.key === 'Enter' && this.addComment());
-        this.submenuUpload.addEventListener('click', (e) => this.handleSubmenuUpload(e));
-        this.videoUpload.addEventListener('change', (e) => this.handleVideoUpload(e));
-        this.publishBtn.addEventListener('click', () => this.publishVideo());
-        this.cancelBtn.addEventListener('click', () => this.cancelUpload());
-        this.submenuChat.addEventListener('click', (e) => this.handleSubmenuChat(e));
-        this.sendChatMessage.addEventListener('click', () => this.sendChat());
-        this.chatInput.addEventListener('keypress', (e) => e.key === 'Enter' && this.sendChat());
-        this.closeChat.addEventListener('click', () => this.chatModal.classList.remove('visible'));
-        this.shareTelegram.addEventListener('click', () => this.shareViaTelegram());
-        this.copyLink.addEventListener('click', () => this.copyVideoLink());
-        this.closeShare.addEventListener('click', () => this.shareModal.classList.remove('visible'));
-        this.themeToggle.addEventListener('click', () => this.toggleTheme());
+        this.sendCommentBtn?.addEventListener('click', () => this.addComment());
+        this.commentInput?.addEventListener('keypress', (e) => e.key === 'Enter' && this.addComment());
+        this.submenuUpload?.addEventListener('click', (e) => this.handleSubmenuUpload(e));
+        this.videoUpload?.addEventListener('change', (e) => this.handleVideoUpload(e));
+        this.publishBtn?.addEventListener('click', () => this.publishVideo());
+        this.cancelBtn?.addEventListener('click', () => this.cancelUpload());
+        this.submenuChat?.addEventListener('click', (e) => this.handleSubmenuChat(e));
+        this.sendChatMessage?.addEventListener('click', () => this.sendChat());
+        this.chatInput?.addEventListener('keypress', (e) => e.key === 'Enter' && this.sendChat());
+        this.closeChat?.addEventListener('click', () => this.chatModal.classList.remove('visible'));
+        this.shareTelegram?.addEventListener('click', () => this.shareViaTelegram());
+        this.copyLink?.addEventListener('click', () => this.copyVideoLink());
+        this.closeShare?.addEventListener('click', () => this.shareModal.classList.remove('visible'));
+        this.themeToggle?.addEventListener('click', () => this.toggleTheme());
         document.querySelector('.drag-handle')?.addEventListener('mousedown', (e) => this.startDragging(e));
         document.querySelector('.drag-handle')?.addEventListener('touchstart', (e) => this.startDragging(e), { passive: false });
         document.querySelector('.fullscreen-btn')?.addEventListener('click', (e) => this.toggleFullscreen(e));
@@ -234,7 +225,7 @@ class VideoManager {
         this.userAvatar.addEventListener('touchmove', stopHold, { passive: false });
     }
 
-async registerChannel() {
+    async registerChannel() {
         if (!this.state.userId) {
             this.showNotification('Пожалуйста, войдите через Telegram.');
             return;
@@ -252,7 +243,7 @@ async registerChannel() {
                 this.state.channels[this.state.userId] = { videos: [], link: channelLink };
                 localStorage.setItem('channels', JSON.stringify(this.state.channels));
                 this.showNotification('Канал успешно зарегистрирован!');
-                if (this.authScreen.style.display !== 'none') this.showPlayer();
+                this.showPlayer();
             } catch (error) {
                 console.error('Ошибка регистрации канала:', error);
                 this.showNotification('Ошибка при регистрации канала!');
@@ -266,13 +257,13 @@ async registerChannel() {
         if (this.userAvatar && this.tg?.initDataUnsafe?.user?.photo_url) {
             this.userAvatar.src = this.tg.initDataUnsafe.user.photo_url;
         } else {
-            this.userAvatar.src = 'https://placehold.co/30';
+            this.userAvatar.src = 'https://placehold.co/30'; // Заменил placeholder
         }
         this.initializeTheme();
         this.initializeTooltips();
     }
 
-async loadInitialVideos() {
+    async loadInitialVideos() {
         try {
             const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/public-videos');
             if (!response.ok) throw new Error('Ошибка сервера');
@@ -789,63 +780,32 @@ async loadInitialVideos() {
         if (!this.state.uploadedFile) return;
 
         const file = this.state.uploadedFile;
-        const fileName = `${this.state.userId}/${Date.now()}_${file.name}`;
         const description = document.getElementById('videoDescription')?.value || '';
 
-        const { data: storageData, error: uploadError } = await supabase.storage
-            .from('videos')
-            .upload(fileName, file, {
-                cacheControl: '3600',
-                upsert: false,
-                contentType: file.type
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('telegram_id', this.state.userId);
+        formData.append('description', description);
+
+        try {
+            const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/upload-video', {
+                method: 'POST',
+                body: formData
             });
+            if (!response.ok) throw new Error('Ошибка загрузки видео');
+            const { url } = await response.json();
 
-        if (uploadError) {
-            console.error('Ошибка загрузки в Storage:', uploadError.message);
-            this.showNotification(`Ошибка загрузки: ${uploadError.message}`);
-            return;
+            this.showNotification('Видео успешно опубликовано!');
+            this.uploadModal.classList.remove('visible');
+            this.state.uploadedFile = null;
+
+            this.state.playlist.unshift({ url, data: this.createEmptyVideoData(this.state.userId) });
+            this.state.currentIndex = 0;
+            this.loadVideo();
+        } catch (error) {
+            console.error('Ошибка публикации видео:', error);
+            this.showNotification(`Ошибка: ${error.message}`);
         }
-
-        this.state.uploadedFileUrl = supabase.storage.from('videos').getPublicUrl(fileName).data.publicUrl;
-
-        const videoData = {
-            url: this.state.uploadedFileUrl,
-            author_id: this.state.userId,
-            description,
-            timestamp: new Date().toISOString(),
-            views: [],
-            likes: 0,
-            dislikes: 0,
-            user_likes: [],
-            user_dislikes: [],
-            comments: [],
-            shares: 0,
-            view_time: 0,
-            replays: 0,
-            duration: this.uploadPreview?.duration || 0,
-            last_position: 0,
-            chat_messages: []
-        };
-
-        const { data, error: insertError } = await supabase
-            .from('publicVideos')
-            .insert(videoData)
-            .select();
-
-        if (insertError) {
-            console.error('Ошибка вставки в базу:', insertError.message);
-            this.showNotification(`Ошибка: ${insertError.message}`);
-            await supabase.storage.from('videos').remove([fileName]);
-            return;
-        }
-
-        this.showNotification('Видео успешно опубликовано!');
-        this.uploadModal.classList.remove('visible');
-        this.state.uploadedFile = null;
-
-        this.state.playlist.unshift({ url: this.state.uploadedFileUrl, data: this.createEmptyVideoData(this.state.userId) });
-        this.state.currentIndex = 0;
-        this.loadVideo();
     }
 
     cancelUpload() {
@@ -896,35 +856,25 @@ async loadInitialVideos() {
     }
 
     async deleteVideo(url) {
-        const { error: deleteDbError } = await supabase
-            .from('publicVideos')
-            .delete()
-            .eq('url', url)
-            .eq('author_id', this.state.userId);
-        if (deleteDbError) {
-            console.error('Ошибка удаления из базы:', deleteDbError.message);
-            this.showNotification(`Ошибка: ${deleteDbError.message}`);
-            throw deleteDbError;
-        }
-
-        const fileName = url.split('/videos/')[1];
-        const { error: deleteStorageError } = await supabase.storage
-            .from('videos')
-            .remove([fileName]);
-        if (deleteStorageError) {
-            console.error('Ошибка удаления из Storage:', deleteStorageError.message);
-            this.showNotification(`Ошибка: ${deleteStorageError.message}`);
-            throw deleteStorageError;
-        }
-
-        this.showNotification('Видео успешно удалено!');
-        const index = this.state.playlist.findIndex(v => v.url === url);
-        if (index !== -1) {
-            this.state.playlist.splice(index, 1);
-            if (this.state.currentIndex === index) {
-                this.state.currentIndex = Math.min(this.state.currentIndex, this.state.playlist.length - 1);
-                this.loadVideo();
+        try {
+            const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/delete-video', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url, telegram_id: this.state.userId })
+            });
+            if (!response.ok) throw new Error('Ошибка удаления видео');
+            this.showNotification('Видео успешно удалено!');
+            const index = this.state.playlist.findIndex(v => v.url === url);
+            if (index !== -1) {
+                this.state.playlist.splice(index, 1);
+                if (this.state.currentIndex === index) {
+                    this.state.currentIndex = Math.min(this.state.currentIndex, this.state.playlist.length - 1);
+                    this.loadVideo();
+                }
             }
+        } catch (error) {
+            console.error('Ошибка удаления видео:', error);
+            this.showNotification(`Ошибка: ${error.message}`);
         }
     }
 
@@ -1015,31 +965,33 @@ async loadInitialVideos() {
         const videoData = this.state.playlist[index].data;
         const url = this.state.playlist[index].url;
         const cacheData = {
-            duration: videoData.duration,
-            last_position: videoData.lastPosition,
+            url,
+            views: Array.from(videoData.views),
+            likes: videoData.likes,
+            dislikes: videoData.dislikes,
             user_likes: Array.from(videoData.userLikes),
             user_dislikes: Array.from(videoData.userDislikes),
             comments: videoData.comments,
-            chat_messages: videoData.chatMessages,
-            likes: videoData.likes,
-            dislikes: videoData.dislikes,
             shares: videoData.shares,
             view_time: videoData.viewTime,
             replays: videoData.replays,
-            views: Array.from(videoData.views),
+            duration: videoData.duration,
+            last_position: videoData.lastPosition,
+            chat_messages: videoData.chatMessages,
             description: videoData.description
         };
         localStorage.setItem(`videoData_${url}`, JSON.stringify(cacheData));
 
         try {
-            const { error } = await supabase
-                .from('publicVideos')
-                .update(cacheData)
-                .eq('url', url);
-            if (error) throw error;
-            console.log('Данные сохранены в Supabase');
+            const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/update-video', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(cacheData)
+            });
+            if (!response.ok) throw new Error('Ошибка обновления данных');
+            console.log('Данные сохранены на сервере');
         } catch (error) {
-            console.error('Ошибка обновления Supabase:', error);
+            console.error('Ошибка обновления данных:', error);
             this.showNotification('Не удалось сохранить данные!');
         }
     }
@@ -1242,12 +1194,12 @@ async loadInitialVideos() {
             this.showNotification('Не удалось скачать видео!');
         } finally {
             this.uploadBtn.classList.remove('downloading');
-            this.uploadBtn.style.setProperty('--progress', '0%'); // Исправлено с HAVProperty
+            this.uploadBtn.style.setProperty('--progress', '0%');
         }
     }
 
     simulateProgress(loaded) {
-        return Math.min(100, (loaded / (1024 * 1024)) * 10); // 10% за каждый MB
+        return Math.min(100, (loaded / (1024 * 1024)) * 10);
     }
 
     startDragging(e) {
