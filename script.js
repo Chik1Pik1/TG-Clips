@@ -36,7 +36,7 @@ class VideoManager {
     }
 
     async init() {
-        console.log('Скрипт обновлён, версия 9');
+        console.log('Скрипт обновлён, версия 10');
         if (this.tg?.initDataUnsafe?.user) {
             this.state.userId = String(this.tg.initDataUnsafe.user.id);
             console.log('Telegram инициализирован, userId:', this.state.userId);
@@ -49,7 +49,7 @@ class VideoManager {
         this.bindElements();
         this.bindEvents();
         await this.loadInitialVideos();
-        this.showPlayer(); // Показываем плеер после успешной загрузки видео
+        this.showPlayer();
     }
 
     bindElements() {
@@ -257,44 +257,62 @@ class VideoManager {
         if (this.userAvatar && this.tg?.initDataUnsafe?.user?.photo_url) {
             this.userAvatar.src = this.tg.initDataUnsafe.user.photo_url;
         } else {
-            this.userAvatar.src = 'https://placehold.co/30'; // Заменил placeholder
+            this.userAvatar.src = 'https://placehold.co/30';
         }
         this.initializeTheme();
         this.initializeTooltips();
     }
 
     async loadInitialVideos() {
+        const stockVideos = [
+            { url: "https://www.w3schools.com/html/mov_bbb.mp4", data: this.createEmptyVideoData('testAuthor123') },
+            { url: "https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4", data: this.createEmptyVideoData('testAuthor123') },
+            { url: "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4", data: this.createEmptyVideoData('testAuthor123') }
+        ];
+
         try {
             const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/public-videos');
-            if (!response.ok) throw new Error('Ошибка сервера');
+            if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
             const data = await response.json();
-            this.state.playlist = data?.map(video => ({
-                url: video.url,
-                data: {
-                    views: new Set(video.views || []),
-                    likes: video.likes || 0,
-                    dislikes: video.dislikes || 0,
-                    userLikes: new Set(video.user_likes || []),
-                    userDislikes: new Set(video.user_dislikes || []),
-                    comments: video.comments || [],
-                    shares: video.shares || 0,
-                    viewTime: video.view_time || 0,
-                    replays: video.replays || 0,
-                    duration: video.duration || 0,
-                    authorId: video.author_id,
-                    lastPosition: video.last_position || 0,
-                    chatMessages: video.chat_messages || [],
-                    description: video.description || ''
-                }
-            })) || [
-                { url: "https://www.w3schools.com/html/mov_bbb.mp4", data: this.createEmptyVideoData('testAuthor123') },
-                { url: "https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4", data: this.createEmptyVideoData('testAuthor123') },
-                { url: "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4", data: this.createEmptyVideoData('testAuthor123') }
-            ];
-            this.loadVideo();
+            console.log('Ответ сервера:', data); // Отладка
+
+            // Если данных нет или массив пустой, используем стоковые видео
+            if (!data || !Array.isArray(data) || data.length === 0) {
+                console.warn('Сервер вернул пустой или некорректный ответ, загружаем стоковые видео');
+                this.state.playlist = stockVideos;
+            } else {
+                this.state.playlist = data.map(video => ({
+                    url: video.url,
+                    data: {
+                        views: new Set(video.views || []),
+                        likes: video.likes || 0,
+                        dislikes: video.dislikes || 0,
+                        userLikes: new Set(video.user_likes || []),
+                        userDislikes: new Set(video.user_dislikes || []),
+                        comments: video.comments || []),
+                        shares: video.shares || 0,
+                        viewTime: video.view_time || 0,
+                        replays: video.replays || 0,
+                        duration: video.duration || 0,
+                        authorId: video.author_id,
+                        lastPosition: video.last_position || 0,
+                        chatMessages: video.chat_messages || [],
+                        description: video.description || ''
+                    }
+                }));
+            }
         } catch (error) {
             console.error('Ошибка загрузки видео:', error);
-            this.showNotification(`Не удалось загрузить видео: ${error.message}`);
+            this.showNotification(`Не удалось загрузить видео с сервера: ${error.message}`);
+            this.state.playlist = stockVideos; // Подставляем стоковые видео при ошибке
+        }
+
+        if (this.state.playlist.length > 0) {
+            console.log('Плейлист загружен:', this.state.playlist);
+            this.loadVideo();
+        } else {
+            console.error('Плейлист пуст после загрузки!');
+            this.showNotification('Не удалось сформировать плейлист!');
         }
     }
 
