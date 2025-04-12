@@ -25,7 +25,7 @@ class VideoManager {
         this.tg = window.Telegram?.WebApp;
         this.MAX_PRELOAD_SIZE = 3;
         this.MAX_PLAYLIST_SIZE = 10;
-        this.updateVideoCache = this.debounce(this._updateVideoCache.bind(this), 1000); // Debounce для ограничения запросов
+        this.updateVideoCache = this.debounce(this._updateVideoCache.bind(this), 1000);
 
         if (this.tg) {
             this.tg.ready();
@@ -36,12 +36,12 @@ class VideoManager {
         }
 
         if (window.tronWeb) {
-            console.log('TronWeb обнаружен:', window.tronWeb);
+            console.log('TronWeb обнаружен:', Object.keys(window.tronWeb));
         }
     }
 
     async init() {
-        console.log('Скрипт обновлён, версия 11');
+        console.log('Скрипт обновлён, версия 12');
         try {
             if (this.tg?.initDataUnsafe?.user) {
                 this.state.userId = String(this.tg.initDataUnsafe.user.id);
@@ -126,14 +126,8 @@ class VideoManager {
             }
         };
 
-        bindButton(this.authBtn, () => {
-            console.log('Кнопка authBtn нажата');
-            this.handleAuth();
-        }, '#authBtn');
-        bindButton(this.registerChannelBtn, () => {
-            console.log('Кнопка registerChannelBtn нажата');
-            this.registerChannel();
-        }, '#registerChannelBtn');
+        bindButton(this.authBtn, () => this.handleAuth(), '#authBtn');
+        bindButton(this.registerChannelBtn, () => this.registerChannel(), '#registerChannelBtn');
 
         this.reactionButtons.forEach(btn =>
             btn.addEventListener('click', e => this.handleReaction(btn.dataset.type, e))
@@ -334,14 +328,17 @@ class VideoManager {
                     description: video.description || ''
                 }
             })) || [];
-            if (!this.state.playlist.length) throw new Error('Плейлист пуст');
+            if (!this.state.playlist.length) {
+                console.warn('Плейлист пуст, переходим на fallback');
+                throw new Error('Плейлист пуст');
+            }
             this.loadVideo();
         } catch (error) {
             console.error('Ошибка загрузки видео:', error);
             this.showNotification(`Не удалось загрузить видео: ${error.message}`);
             this.state.playlist = [
                 {
-                    url: '/assets/sample-video.mp4', // Локальный fallback
+                    url: 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4',
                     data: this.createEmptyVideoData('testAuthor123')
                 }
             ];
@@ -1239,37 +1236,51 @@ class VideoManager {
 
     async _updateVideoCache(index) {
         try {
-            const videoData = this.state.playlist[index].data;
-            const url = this.state.playlist[index].url;
+            const videoData = this.state.playlist[index]?.data;
+            const url = this.state.playlist[index]?.url;
+            if (!videoData || !url) {
+                console.error('Ошибка: видео или URL не найдены для индекса', index);
+                return;
+            }
+
             const cacheData = {
                 url,
-                views: Array.from(videoData.views),
-                likes: videoData.likes,
-                dislikes: videoData.dislikes,
-                user_likes: Array.from(videoData.userLikes),
-                user_dislikes: Array.from(videoData.userDislikes),
-                comments: videoData.comments,
-                shares: videoData.shares,
-                view_time: videoData.viewTime,
-                replays: videoData.replays,
-                duration: videoData.duration,
-                last_position: videoData.lastPosition,
-                chat_messages: videoData.chatMessages,
-                description: videoData.description
+                views: Array.from(videoData.views || []),
+                likes: videoData.likes || 0,
+                dislikes: videoData.dislikes || 0,
+                user_likes: Array.from(videoData.userLikes || []),
+                user_dislikes: Array.from(videoData.userDislikes || []),
+                comments: videoData.comments || [],
+                shares: videoData.shares || 0,
+                view_time: videoData.viewTime || 0,
+                replays: videoData.replays || 0,
+                duration: videoData.duration || 0,
+                last_position: videoData.lastPosition || 0,
+                chat_messages: videoData.chatMessages || [],
+                description: videoData.description || ''
             };
+
+            // Сохраняем локально
             localStorage.setItem(`videoData_${url}`, JSON.stringify(cacheData));
 
-            const response = await fetch('http://localhost:3000/api/update-video', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                body: JSON.stringify(cacheData)
-            });
-            if (!response.ok) throw new Error(`Ошибка обновления данных: ${response.status}`);
-            console.log('Данные сохранены на сервере');
+            // Пробуем отправить на сервер
+            try {
+                const response = await fetch('http://localhost:3000/api/update-video', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify(cacheData)
+                });
+                if (!response.ok) {
+                    throw new Error(`Ошибка сервера: ${response.status}`);
+                }
+                console.log(`Данные видео ${url} сохранены на сервере`);
+            } catch (fetchError) {
+                console.warn('Не удалось сохранить данные на сервере:', fetchError.message);
+                localStorage.setItem(`videoData_${url}_offline`, JSON.stringify(cacheData));
+            }
         } catch (error) {
-            console.error('Ошибка обновления данных:', error);
-            localStorage.setItem(`videoData_${this.state.playlist[index].url}_offline`, JSON.stringify(cacheData));
-            console.log('Данные сохранены локально из-за ошибки сети');
+            console.error('Критическая ошибка в _updateVideoCache:', error);
+            this.showNotification('Ошибка сохранения данных видео');
         }
     }
 
@@ -1587,13 +1598,11 @@ class VideoManager {
             e.preventDefault();
 
             if (this.tg && this.tg.isVersionGte('6.1')) {
-                // Попробуем Telegram fullscreen
                 this.tg.requestFullscreen().then(() => {
                     document.body.classList.add('telegram-fullscreen');
                     this.showNotification('Полноэкранный режим включён');
                 }).catch(err => {
                     console.error('Ошибка Telegram fullscreen:', err);
-                    // Fallback на браузерный fullscreen
                     this.tryBrowserFullscreen();
                 });
             } else {
