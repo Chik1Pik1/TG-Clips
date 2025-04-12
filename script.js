@@ -30,6 +30,7 @@ class VideoManager {
             this.tg.ready();
             this.tg.expand();
             console.log('Telegram Web App инициализирован:', this.tg.initDataUnsafe);
+            console.log('Версия Telegram Web App:', this.tg.version);
         } else {
             console.warn('Telegram Web App SDK не загружен. Работа в режиме браузера.');
         }
@@ -117,33 +118,44 @@ class VideoManager {
         bindButton(this.registerChannelBtn, () => this.registerChannel(), '#registerChannelBtn');
 
         this.reactionButtons.forEach(btn => btn.addEventListener('click', (e) => this.handleReaction(btn.dataset.type, e)));
-        this.plusBtn?.addEventListener('click', (e) => this.toggleSubmenu(e));
-        this.uploadBtn?.addEventListener('click', (e) => this.downloadCurrentVideo(e));
-        this.toggleReactionBar?.addEventListener('click', (e) => this.toggleReactionBarVisibility(e));
-        this.video?.addEventListener('loadedmetadata', () => this.handleLoadedMetadata(), { once: true });
-        this.video?.addEventListener('play', () => this.handlePlay());
-        this.video?.addEventListener('pause', () => this.handlePause());
-        this.video?.addEventListener('ended', () => this.handleEnded());
-        this.video?.addEventListener('timeupdate', () => this.handleTimeUpdate());
-        this.progressRange?.addEventListener('input', (e) => this.handleProgressInput(e));
+        bindButton(this.plusBtn, (e) => this.toggleSubmenu(e), '.plus-btn');
+        bindButton(this.uploadBtn, (e) => this.downloadCurrentVideo(e), '.upload-btn');
+        bindButton(this.toggleReactionBar, (e) => this.toggleReactionBarVisibility(e), '.toggle-reaction-bar');
+        if (this.video) {
+            this.video.addEventListener('loadedmetadata', () => this.handleLoadedMetadata(), { once: true });
+            this.video.addEventListener('play', () => this.handlePlay());
+            this.video.addEventListener('pause', () => this.handlePause());
+            this.video.addEventListener('ended', () => this.handleEnded());
+            this.video.addEventListener('timeupdate', () => this.handleTimeUpdate());
+        }
+        bindButton(this.progressRange, (e) => this.handleProgressInput(e), '#progressRange');
         this.setupSwipeAndMouseEvents();
-        this.sendCommentBtn?.addEventListener('click', () => this.addComment());
-        this.commentInput?.addEventListener('keypress', (e) => e.key === 'Enter' && this.addComment());
-        this.submenuUpload?.addEventListener('click', (e) => this.handleSubmenuUpload(e));
-        this.videoUpload?.addEventListener('change', (e) => this.handleVideoUpload(e));
-        this.publishBtn?.addEventListener('click', () => this.publishVideo());
-        this.cancelBtn?.addEventListener('click', () => this.cancelUpload());
-        this.submenuChat?.addEventListener('click', (e) => this.handleSubmenuChat(e));
-        this.sendChatMessage?.addEventListener('click', () => this.sendChat());
-        this.chatInput?.addEventListener('keypress', (e) => e.key === 'Enter' && this.sendChat());
-        this.closeChat?.addEventListener('click', () => this.chatModal.classList.remove('visible'));
-        this.shareTelegram?.addEventListener('click', () => this.shareViaTelegram());
-        this.copyLink?.addEventListener('click', () => this.copyVideoLink());
-        this.closeShare?.addEventListener('click', () => this.shareModal.classList.remove('visible'));
-        this.themeToggle?.addEventListener('click', () => this.toggleTheme());
-        document.querySelector('.drag-handle')?.addEventListener('mousedown', (e) => this.startDragging(e));
-        document.querySelector('.drag-handle')?.addEventListener('touchstart', (e) => this.startDragging(e), { passive: false });
-        document.querySelector('.fullscreen-btn')?.addEventListener('click', (e) => this.toggleFullscreen(e));
+        bindButton(this.sendCommentBtn, () => this.addComment(), '#sendComment');
+        if (this.commentInput) {
+            this.commentInput.addEventListener('keypress', (e) => e.key === 'Enter' && this.addComment());
+        }
+        bindButton(this.submenuUpload, (e) => this.handleSubmenuUpload(e), '#uploadVideo');
+        if (this.videoUpload) {
+            this.videoUpload.addEventListener('change', (e) => this.handleVideoUpload(e));
+        }
+        bindButton(this.publishBtn, () => this.publishVideo(), '#publishBtn');
+        bindButton(this.cancelBtn, () => this.cancelUpload(), '#cancelBtn');
+        bindButton(this.submenuChat, (e) => this.handleSubmenuChat(e), '#chatAuthor');
+        bindButton(this.sendChatMessage, () => this.sendChat(), '#sendChatMessage');
+        if (this.chatInput) {
+            this.chatInput.addEventListener('keypress', (e) => e.key === 'Enter' && this.sendChat());
+        }
+        bindButton(this.closeChat, () => this.chatModal.classList.remove('visible'), '#closeChat');
+        bindButton(this.shareTelegram, () => this.shareViaTelegram(), '#shareTelegram');
+        bindButton(this.copyLink, () => this.copyVideoLink(), '#copyLink');
+        bindButton(this.closeShare, () => this.shareModal.classList.remove('visible'), '#closeShare');
+        bindButton(this.themeToggle, () => this.toggleTheme(), '.theme-toggle');
+        const dragHandle = document.querySelector('.drag-handle');
+        if (dragHandle) {
+            dragHandle.addEventListener('mousedown', (e) => this.startDragging(e));
+            dragHandle.addEventListener('touchstart', (e) => this.startDragging(e), { passive: false });
+        }
+        bindButton(document.querySelector('.fullscreen-btn'), (e) => this.toggleFullscreen(e), '.fullscreen-btn');
         document.addEventListener('click', (e) => this.hideManagementListOnClickOutside(e));
         this.bindUserAvatar();
     }
@@ -177,6 +189,8 @@ class VideoManager {
 
         this.userAvatar.addEventListener('click', (e) => {
             e.stopPropagation();
+            console.log('Клик по аватару, userId:', this.state.userId);
+            console.log('Каналы:', this.state.channels);
             if (!this.state.isHolding) {
                 const channel = this.state.channels[this.state.userId];
                 if (channel?.link) {
@@ -188,6 +202,7 @@ class VideoManager {
                     }
                 } else {
                     this.showNotification('Канал не зарегистрирован. Зарегистрируйте его!');
+                    console.log('Вызов registerChannel');
                     this.registerChannel();
                 }
             }
@@ -231,6 +246,7 @@ class VideoManager {
             return;
         }
         const channelLink = prompt('Введите ссылку на ваш Telegram-канал (например, https://t.me/yourchannel):');
+        console.log('Введённая ссылка:', channelLink);
         if (channelLink && channelLink.match(/^https:\/\/t\.me\/[a-zA-Z0-9_]+$/)) {
             try {
                 const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/register-channel', {
@@ -238,6 +254,7 @@ class VideoManager {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ telegram_id: this.state.userId, channel_link: channelLink })
                 });
+                console.log('Ответ /api/register-channel:', response.status, await response.text());
                 if (!response.ok) throw new Error('Ошибка сервера');
                 const result = await response.json();
                 this.state.channels[this.state.userId] = { videos: [], link: channelLink };
@@ -265,17 +282,18 @@ class VideoManager {
 
     async loadInitialVideos() {
         const stockVideos = [
-            { url: "https://www.w3schools.com/html/mov_bbb.mp4", data: this.createEmptyVideoData('testAuthor123') },
             { url: "https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4", data: this.createEmptyVideoData('testAuthor123') },
-            { url: "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4", data: this.createEmptyVideoData('testAuthor123') }
+            { url: "https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_2mb.mp4", data: this.createEmptyVideoData('testAuthor123') },
+            { url: "https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_5mb.mp4", data: this.createEmptyVideoData('testAuthor123') }
         ];
 
         try {
             console.log('Попытка загрузить видео с сервера...');
             const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/public-videos');
+            console.log('Ответ /api/public-videos:', response.status, await response.text());
             if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
             const data = await response.json();
-            console.log('Ответ сервера:', data);
+            console.log('Полученные данные:', data);
 
             if (!data || !Array.isArray(data) || data.length === 0) {
                 console.warn('Сервер вернул пустой или некорректный ответ, используем стоковые видео');
@@ -304,12 +322,12 @@ class VideoManager {
         } catch (error) {
             console.error('Ошибка загрузки видео с сервера:', error);
             this.showNotification(`Не удалось загрузить видео с сервера: ${error.message}`);
-            this.state.playlist = stockVideos; // Используем стоковые видео при любой ошибке
+            this.state.playlist = stockVideos;
         }
 
         console.log('Итоговый плейлист:', this.state.playlist);
         if (this.state.playlist.length > 0) {
-            this.state.currentIndex = 0; // Сбрасываем индекс для безопасности
+            this.state.currentIndex = 0;
             this.loadVideo();
         } else {
             console.error('Плейлист пуст после всех попыток!');
@@ -337,17 +355,20 @@ class VideoManager {
     }
 
     handleLoadedMetadata() {
+        if (!this.video) return;
         this.video.muted = true;
         this.video.play().then(() => {
             this.video.pause();
             this.video.muted = false;
         }).catch(err => console.error('Unlock error:', err));
-        const videoData = this.state.playlist[this.state.currentIndex].data;
-        videoData.duration = this.video.duration;
-        this.progressRange.max = this.video.duration;
-        this.progressRange.value = videoData.lastPosition || 0;
-        this.updateVideoCache(this.state.currentIndex);
-        this.updateRating();
+        const videoData = this.state.playlist[this.state.currentIndex]?.data;
+        if (videoData) {
+            videoData.duration = this.video.duration;
+            this.progressRange.max = this.video.duration;
+            this.progressRange.value = videoData.lastPosition || 0;
+            this.updateVideoCache(this.state.currentIndex);
+            this.updateRating();
+        }
     }
 
     handlePlay() {
@@ -376,8 +397,11 @@ class VideoManager {
             this.state.isProgressBarActivated = true;
             this.progressBar.classList.add('visible');
         }
-        this.state.playlist[this.state.currentIndex].data.lastPosition = this.video.currentTime;
-        this.updateVideoCache(this.state.currentIndex);
+        const videoData = this.state.playlist[this.state.currentIndex]?.data;
+        if (videoData) {
+            videoData.lastPosition = this.video.currentTime;
+            this.updateVideoCache(this.state.currentIndex);
+        }
     }
 
     handleEnded() {
@@ -412,17 +436,22 @@ class VideoManager {
             return;
         }
         this.video.currentTime = e.target.value;
-        this.state.playlist[this.state.currentIndex].data.lastPosition = this.video.currentTime;
-        this.updateVideoCache(this.state.currentIndex);
+        const videoData = this.state.playlist[this.state.currentIndex]?.data;
+        if (videoData) {
+            videoData.lastPosition = this.video.currentTime;
+            this.updateVideoCache(this.state.currentIndex);
+        }
     }
 
     setupSwipeAndMouseEvents() {
-        this.swipeArea.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
-        this.swipeArea.addEventListener('touchmove', this.throttle((e) => this.handleTouchMove(e), 16), { passive: false });
-        this.swipeArea.addEventListener('touchend', (e) => this.handleTouchEnd(e));
-        this.swipeArea.addEventListener('mousedown', (e) => this.handleMouseStart(e));
-        this.swipeArea.addEventListener('mousemove', this.throttle((e) => this.handleMouseMove(e), 16));
-        this.swipeArea.addEventListener('mouseup', (e) => this.handleMouseEnd(e));
+        if (this.swipeArea) {
+            this.swipeArea.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
+            this.swipeArea.addEventListener('touchmove', this.throttle((e) => this.handleTouchMove(e), 16), { passive: false });
+            this.swipeArea.addEventListener('touchend', (e) => this.handleTouchEnd(e));
+            this.swipeArea.addEventListener('mousedown', (e) => this.handleMouseStart(e));
+            this.swipeArea.addEventListener('mousemove', this.throttle((e) => this.handleMouseMove(e), 16));
+            this.swipeArea.addEventListener('mouseup', (e) => this.handleMouseEnd(e));
+        }
     }
 
     handleTouchStart(e) {
@@ -727,8 +756,10 @@ class VideoManager {
     }
 
     handleAvatarClick(userId) {
+        console.log('Клик по аватару комментария, userId:', userId);
         const channel = this.state.channels[userId];
         if (channel?.link) {
+            console.log('Переход на канал:', channel.link);
             if (this.tg?.version && parseFloat(this.tg.version) >= 6.0) {
                 this.tg.openTelegramLink(channel.link);
             } else {
@@ -833,18 +864,25 @@ class VideoManager {
 
     async handleVideoUpload(e) {
         this.state.uploadedFile = e.target.files[0];
-        if (!this.state.uploadedFile) return;
+        if (!this.state.uploadedFile) {
+            console.error('Файл не выбран');
+            this.showNotification('Выберите видео для загрузки!');
+            return;
+        }
 
         const maxSize = 100 * 1024 * 1024;
         const validTypes = ['video/mp4', 'video/quicktime', 'video/webm'];
 
+        console.log('Выбранный файл:', this.state.uploadedFile.name, this.state.uploadedFile.size, this.state.uploadedFile.type);
         if (this.state.uploadedFile.size > maxSize) {
             this.showNotification('Файл слишком большой! Максимум 100 МБ.');
+            this.state.uploadedFile = null;
             return;
         }
 
         if (!validTypes.includes(this.state.uploadedFile.type)) {
             this.showNotification('Неподдерживаемый формат! Используйте MP4, MOV или WebM.');
+            this.state.uploadedFile = null;
             return;
         }
 
@@ -861,16 +899,26 @@ class VideoManager {
         this.publishBtn.disabled = false;
 
         this.uploadPreview.onloadedmetadata = () => {
-            this.state.playlist[this.state.currentIndex].data.duration = this.uploadPreview.duration;
+            const videoData = this.state.playlist[this.state.currentIndex]?.data;
+            if (videoData) {
+                videoData.duration = this.uploadPreview.duration;
+                this.updateVideoCache(this.state.currentIndex);
+            }
             this.uploadPreview.onloadedmetadata = null;
         };
     }
 
     async publishVideo() {
-        if (!this.state.uploadedFile) return;
+        if (!this.state.uploadedFile) {
+            console.error('Файл для загрузки отсутствует');
+            this.showNotification('Выберите видео для загрузки!');
+            return;
+        }
 
         const file = this.state.uploadedFile;
         const description = document.getElementById('videoDescription')?.value || '';
+        console.log('Загрузка файла:', file.name, file.type, file.size);
+        console.log('telegram_id:', this.state.userId, 'Описание:', description);
 
         const formData = new FormData();
         formData.append('file', file);
@@ -882,8 +930,10 @@ class VideoManager {
                 method: 'POST',
                 body: formData
             });
+            console.log('Ответ /api/upload-video:', response.status, await response.text());
             if (!response.ok) throw new Error('Ошибка загрузки видео');
             const { url } = await response.json();
+            console.log('Полученный URL:', url);
 
             this.showNotification('Видео успешно опубликовано!');
             this.uploadModal.classList.remove('visible');
@@ -952,6 +1002,7 @@ class VideoManager {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url, telegram_id: this.state.userId })
             });
+            console.log('Ответ /api/delete-video:', response.status, await response.text());
             if (!response.ok) throw new Error('Ошибка удаления видео');
             this.showNotification('Видео успешно удалено!');
             const index = this.state.playlist.findIndex(v => v.url === url);
@@ -1099,6 +1150,7 @@ class VideoManager {
             chat_messages: videoData.chatMessages,
             description: videoData.description
         };
+        console.log('Отправляемые данные для обновления:', cacheData);
         localStorage.setItem(`videoData_${url}`, JSON.stringify(cacheData));
 
         try {
@@ -1107,6 +1159,7 @@ class VideoManager {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(cacheData)
             });
+            console.log('Ответ /api/update-video:', response.status, await response.text());
             if (!response.ok) throw new Error('Ошибка обновления данных');
             console.log('Данные сохранены на сервере');
         } catch (error) {
@@ -1281,16 +1334,19 @@ class VideoManager {
         }
         const videoUrl = this.state.playlist[this.state.currentIndex].url;
         if (!videoUrl) {
+            console.error('URL видео отсутствует');
             this.showNotification('Нет видео для скачивания!');
             return;
         }
 
+        console.log('Попытка скачать видео:', videoUrl);
         this.uploadBtn.classList.add('downloading');
         this.uploadBtn.style.setProperty('--progress', '0%');
 
         try {
             const response = await fetch(videoUrl, { mode: 'cors' });
-            if (!response.ok) throw new Error('Ошибка загрузки видео');
+            console.log('Статус ответа:', response.status, response.statusText);
+            if (!response.ok) throw new Error(`Ошибка загрузки: ${response.statusText}`);
 
             const total = Number(response.headers.get('content-length')) || 0;
             let loaded = 0;
@@ -1303,6 +1359,7 @@ class VideoManager {
                 chunks.push(value);
                 loaded += value.length;
                 const progress = total ? (loaded / total) * 100 : this.simulateProgress(loaded);
+                console.log('Прогресс:', progress);
                 this.uploadBtn.style.setProperty('--progress', `${progress}%`);
             }
 
