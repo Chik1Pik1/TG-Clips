@@ -25,8 +25,8 @@ class VideoManager {
         this.tg = window.Telegram?.WebApp;
         this.MAX_PRELOAD_SIZE = 3;
         this.MAX_PLAYLIST_SIZE = 10;
+        this.updateVideoCache = this.debounce(this._updateVideoCache.bind(this), 1000); // Debounce для ограничения запросов
 
-        // Проверка Telegram Web App
         if (this.tg) {
             this.tg.ready();
             this.tg.expand();
@@ -35,16 +35,13 @@ class VideoManager {
             console.warn('Telegram Web App SDK не загружен. Работа в режиме браузера.');
         }
 
-        // Проверка TronWeb
         if (window.tronWeb) {
             console.log('TronWeb обнаружен:', window.tronWeb);
-        } else {
-            console.log('TronWeb не найден');
         }
     }
 
     async init() {
-        console.log('Скрипт обновлён, версия 10');
+        console.log('Скрипт обновлён, версия 11');
         try {
             if (this.tg?.initDataUnsafe?.user) {
                 this.state.userId = String(this.tg.initDataUnsafe.user.id);
@@ -55,13 +52,9 @@ class VideoManager {
             }
             console.log('Зарегистрированные каналы:', this.state.channels);
 
-            console.log('Привязка элементов...');
             this.bindElements();
-            console.log('Привязка событий...');
             this.bindEvents();
-            console.log('Загрузка видео...');
             await this.loadInitialVideos();
-            console.log('Показ плеера...');
             this.showPlayer();
         } catch (error) {
             console.error('Ошибка инициализации:', error);
@@ -119,7 +112,6 @@ class VideoManager {
         this.videoUpload.style.display = 'none';
         document.body.appendChild(this.videoUpload);
 
-        // Проверка элементов
         if (!this.authBtn) console.error('#authBtn не найден');
         if (!this.registerChannelBtn) console.error('#registerChannelBtn не найден');
     }
@@ -278,7 +270,10 @@ class VideoManager {
             try {
                 const response = await fetch('http://localhost:3000/api/register-channel', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
                     body: JSON.stringify({ telegram_id: this.state.userId, channel_link: channelLink })
                 });
                 if (!response.ok) {
@@ -315,7 +310,9 @@ class VideoManager {
 
     async loadInitialVideos() {
         try {
-            const response = await fetch('http://localhost:3000/api/public-videos');
+            const response = await fetch('http://localhost:3000/api/public-videos', {
+                headers: { 'Accept': 'application/json' }
+            });
             if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
             const data = await response.json();
             this.state.playlist = data?.map(video => ({
@@ -336,27 +333,15 @@ class VideoManager {
                     chatMessages: video.chat_messages || [],
                     description: video.description || ''
                 }
-            })) || [
-                {
-                    url: 'https://www.w3schools.com/html/mov_bbb.mp4',
-                    data: this.createEmptyVideoData('testAuthor123')
-                },
-                {
-                    url: 'https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4',
-                    data: this.createEmptyVideoData('testAuthor123')
-                },
-                {
-                    url: 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4',
-                    data: this.createEmptyVideoData('testAuthor123')
-                }
-            ];
+            })) || [];
+            if (!this.state.playlist.length) throw new Error('Плейлист пуст');
             this.loadVideo();
         } catch (error) {
             console.error('Ошибка загрузки видео:', error);
             this.showNotification(`Не удалось загрузить видео: ${error.message}`);
             this.state.playlist = [
                 {
-                    url: 'https://www.w3schools.com/html/mov_bbb.mp4',
+                    url: '/assets/sample-video.mp4', // Локальный fallback
                     data: this.createEmptyVideoData('testAuthor123')
                 }
             ];
@@ -1252,7 +1237,7 @@ class VideoManager {
         }
     }
 
-    async updateVideoCache(index) {
+    async _updateVideoCache(index) {
         try {
             const videoData = this.state.playlist[index].data;
             const url = this.state.playlist[index].url;
@@ -1276,14 +1261,15 @@ class VideoManager {
 
             const response = await fetch('http://localhost:3000/api/update-video', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 body: JSON.stringify(cacheData)
             });
             if (!response.ok) throw new Error(`Ошибка обновления данных: ${response.status}`);
             console.log('Данные сохранены на сервере');
         } catch (error) {
             console.error('Ошибка обновления данных:', error);
-            this.showNotification('Не удалось сохранить данные!');
+            localStorage.setItem(`videoData_${this.state.playlist[index].url}_offline`, JSON.stringify(cacheData));
+            console.log('Данные сохранены локально из-за ошибки сети');
         }
     }
 
@@ -1374,6 +1360,14 @@ class VideoManager {
                 inThrottle = true;
                 setTimeout(() => (inThrottle = false), limit);
             }
+        };
+    }
+
+    debounce(func, wait) {
+        let timeout;
+        return function (...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(this, args), wait);
         };
     }
 
@@ -1593,38 +1587,46 @@ class VideoManager {
             e.preventDefault();
 
             if (this.tg && this.tg.isVersionGte('6.1')) {
-                this.tg
-                    .requestFullscreen()
-                    .then(() => {
-                        document.body.classList.add('telegram-fullscreen');
-                        this.showNotification('Полноэкранный режим включён');
-                    })
-                    .catch(err => {
-                        console.error('Ошибка полноэкранного режима Telegram:', err);
-                        this.tg.expand();
-                        this.showNotification('Полноэкранный режим недоступен, использовано расширение');
-                    });
-            } else if (!this.tg) {
-                if (!document.fullscreenElement) {
-                    document.documentElement
-                        .requestFullscreen()
-                        .then(() => document.body.classList.add('fullscreen-mode'))
-                        .catch(err => {
-                            console.error('Ошибка полноэкранного режима:', err);
-                            this.showNotification('Полноэкранный режим не поддерживается');
-                        });
-                } else {
-                    document
-                        .exitFullscreen()
-                        .then(() => document.body.classList.remove('fullscreen-mode'))
-                        .catch(err => console.error('Ошибка выхода из полноэкранного режима:', err));
-                }
+                // Попробуем Telegram fullscreen
+                this.tg.requestFullscreen().then(() => {
+                    document.body.classList.add('telegram-fullscreen');
+                    this.showNotification('Полноэкранный режим включён');
+                }).catch(err => {
+                    console.error('Ошибка Telegram fullscreen:', err);
+                    // Fallback на браузерный fullscreen
+                    this.tryBrowserFullscreen();
+                });
             } else {
-                this.tg.expand();
-                this.showNotification('Полноэкранный режим недоступен в этой версии Telegram');
+                this.tryBrowserFullscreen();
             }
         } catch (error) {
             console.error('Ошибка полноэкранного режима:', error);
+            this.showNotification('Не удалось включить полноэкранный режим');
+        }
+    }
+
+    tryBrowserFullscreen() {
+        try {
+            if (!document.fullscreenElement) {
+                const element = this.playerContainer || document.documentElement;
+                element.requestFullscreen().then(() => {
+                    document.body.classList.add('fullscreen-mode');
+                    this.showNotification('Полноэкранный режим включён');
+                }).catch(err => {
+                    console.error('Ошибка браузерного fullscreen:', err);
+                    this.showNotification('Полноэкранный режим не поддерживается');
+                });
+            } else {
+                document.exitFullscreen().then(() => {
+                    document.body.classList.remove('fullscreen-mode');
+                    this.showNotification('Полноэкранный режим выключен');
+                }).catch(err => {
+                    console.error('Ошибка выхода из fullscreen:', err);
+                    this.showNotification('Не удалось выйти из полноэкранного режима');
+                });
+            }
+        } catch (error) {
+            console.error('Ошибка попытки браузерного fullscreen:', error);
             this.showNotification('Ошибка полноэкранного режима');
         }
     }
@@ -1633,7 +1635,7 @@ class VideoManager {
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOMContentLoaded');
     if (window.tronWeb) {
-        console.log('TronWeb обнаружен при загрузке:', window.tronWeb);
+        console.log('TronWeb обнаружен при загрузке:', Object.keys(window.tronWeb));
     }
     const videoManager = new VideoManager();
     try {
