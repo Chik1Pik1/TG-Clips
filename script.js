@@ -25,6 +25,7 @@ class VideoManager {
         this.tg = window.Telegram?.WebApp;
         this.MAX_PRELOAD_SIZE = 3;
         this.MAX_PLAYLIST_SIZE = 10;
+        this.SERVER_URL = 'https://handicapped-maudie-tgclips-ca255b32.koyeb.app';
 
         if (this.tg) {
             this.tg.ready();
@@ -36,7 +37,7 @@ class VideoManager {
     }
 
     async init() {
-        console.log('Скрипт обновлён, версия 10');
+        console.log('Скрипт обновлён, версия 11');
         if (this.tg?.initDataUnsafe?.user) {
             this.state.userId = String(this.tg.initDataUnsafe.user.id);
             console.log('Telegram инициализирован, userId:', this.state.userId);
@@ -80,6 +81,7 @@ class VideoManager {
         this.toggleReactionBar = document.querySelector('.toggle-reaction-bar');
         this.plusBtn = document.querySelector('.plus-btn');
         this.uploadBtn = document.querySelector('.upload-btn');
+        this.downloadBtn = document.querySelector('.download-btn');
         this.submenuUpload = document.getElementById('uploadVideo');
         this.submenuChat = document.getElementById('chatAuthor');
         this.uploadModal = document.getElementById('uploadModal');
@@ -115,10 +117,11 @@ class VideoManager {
 
         bindButton(this.authBtn, () => this.handleAuth(), '#authBtn');
         bindButton(this.registerChannelBtn, () => this.registerChannel(), '#registerChannelBtn');
+        bindButton(this.downloadBtn, (e) => this.downloadCurrentVideo(e), '.download-btn');
 
         this.reactionButtons.forEach(btn => btn.addEventListener('click', (e) => this.handleReaction(btn.dataset.type, e)));
         this.plusBtn?.addEventListener('click', (e) => this.toggleSubmenu(e));
-        this.uploadBtn?.addEventListener('click', (e) => this.downloadCurrentVideo(e));
+        this.uploadBtn?.addEventListener('click', (e) => this.handleSubmenuUpload(e));
         this.toggleReactionBar?.addEventListener('click', (e) => this.toggleReactionBarVisibility(e));
         this.video?.addEventListener('loadedmetadata', () => this.handleLoadedMetadata(), { once: true });
         this.video?.addEventListener('play', () => this.handlePlay());
@@ -175,20 +178,39 @@ class VideoManager {
             return;
         }
 
-        this.userAvatar.addEventListener('click', (e) => {
+        this.userAvatar.addEventListener('click', async (e) => {
             e.stopPropagation();
             if (!this.state.isHolding) {
-                const channel = this.state.channels[this.state.userId];
-                if (channel?.link) {
-                    console.log('Переход на канал:', channel.link);
-                    if (this.tg?.version && parseFloat(this.tg.version) >= 6.0) {
-                        this.tg.openTelegramLink(channel.link);
-                    } else {
-                        window.open(channel.link, '_blank');
+                try {
+                    if (!this.state.userId) {
+                        this.showNotification('Войдите через Telegram');
+                        return;
                     }
-                } else {
-                    this.showNotification('Канал не зарегистрирован. Зарегистрируйте его!');
-                    this.registerChannel();
+
+                    console.log('Запрос канала для telegram_id:', this.state.userId);
+                    const response = await fetch(`${this.SERVER_URL}/api/get-channel?telegram_id=${this.state.userId}`, {
+                        mode: 'cors'
+                    });
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Ошибка сервера');
+                    }
+
+                    const { channel_link } = await response.json();
+                    if (channel_link) {
+                        console.log('Открытие канала:', channel_link);
+                        if (this.tg?.openTelegramLink && parseFloat(this.tg?.version) >= 6.0) {
+                            this.tg.openTelegramLink(channel_link);
+                        } else {
+                            window.open(channel_link, '_blank');
+                        }
+                    } else {
+                        this.showNotification('Канал не зарегистрирован. Зарегистрируйте его!');
+                        this.registerChannel();
+                    }
+                } catch (error) {
+                    console.error('Ошибка получения канала:', error);
+                    this.showNotification(`Ошибка: ${error.message}`);
                 }
             }
         });
@@ -233,12 +255,15 @@ class VideoManager {
         const channelLink = prompt('Введите ссылку на ваш Telegram-канал (например, https://t.me/yourchannel):');
         if (channelLink && channelLink.match(/^https:\/\/t\.me\/[a-zA-Z0-9_]+$/)) {
             try {
-                const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/register-channel', {
+                const response = await fetch(`${this.SERVER_URL}/api/register-channel`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ telegram_id: this.state.userId, channel_link: channelLink })
                 });
-                if (!response.ok) throw new Error('Ошибка сервера');
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Ошибка сервера');
+                }
                 const result = await response.json();
                 this.state.channels[this.state.userId] = { videos: [], link: channelLink };
                 localStorage.setItem('channels', JSON.stringify(this.state.channels));
@@ -246,7 +271,7 @@ class VideoManager {
                 this.showPlayer();
             } catch (error) {
                 console.error('Ошибка регистрации канала:', error);
-                this.showNotification('Ошибка при регистрации канала!');
+                this.showNotification(`Ошибка: ${error.message}`);
             }
         } else {
             this.showNotification('Введите корректную ссылку на Telegram-канал.');
@@ -272,8 +297,13 @@ class VideoManager {
 
         try {
             console.log('Попытка загрузить видео с сервера...');
-            const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/public-videos');
-            if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
+            const response = await fetch(`${this.SERVER_URL}/api/public-videos`, {
+                mode: 'cors'
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Ошибка сервера: ${response.status}`);
+            }
             const data = await response.json();
             console.log('Ответ сервера:', data);
 
@@ -303,13 +333,13 @@ class VideoManager {
             }
         } catch (error) {
             console.error('Ошибка загрузки видео с сервера:', error);
-            this.showNotification(`Не удалось загрузить видео с сервера: ${error.message}`);
-            this.state.playlist = stockVideos; // Используем стоковые видео при любой ошибке
+            this.showNotification(`Не удалось загрузить видео: ${error.message}`);
+            this.state.playlist = stockVideos;
         }
 
         console.log('Итоговый плейлист:', this.state.playlist);
         if (this.state.playlist.length > 0) {
-            this.state.currentIndex = 0; // Сбрасываем индекс для безопасности
+            this.state.currentIndex = 0;
             this.loadVideo();
         } else {
             console.error('Плейлист пуст после всех попыток!');
@@ -337,6 +367,10 @@ class VideoManager {
     }
 
     handleLoadedMetadata() {
+        if (!this.state.playlist || this.state.playlist.length === 0) {
+            console.warn('Плейлист пуст, обработка метаданных невозможна');
+            return;
+        }
         this.video.muted = true;
         this.video.play().then(() => {
             this.video.pause();
@@ -352,10 +386,11 @@ class VideoManager {
 
     handlePlay() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, обработка воспроизведения невозможна');
+            console.warn('Плейлист пуст, воспроизведение невозможно');
+            this.showNotification('Нет видео для воспроизведения');
             return;
         }
-        const videoData = this.state.playlist[this.state.currentIndex].data;
+        const  const videoData = this.state.playlist[this.state.currentIndex].data;
         if (!this.state.hasViewed && this.state.userId) {
             videoData.views.add(this.state.userId);
             this.state.hasViewed = true;
@@ -369,7 +404,7 @@ class VideoManager {
 
     handlePause() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, обработка паузы невозможна');
+            console.warn('Плейлист пуст, пауза невозможна');
             return;
         }
         if (!this.state.isProgressBarActivated) {
@@ -382,7 +417,7 @@ class VideoManager {
 
     handleEnded() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, обработка окончания невозможна');
+            console.warn('Плейлист пуст, обработка окончания невозможна');
             return;
         }
         const videoData = this.state.playlist[this.state.currentIndex].data;
@@ -394,7 +429,7 @@ class VideoManager {
 
     handleTimeUpdate() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, обновление времени невозможно');
+            console.warn('Плейлист пуст, обновление времени невозможно');
             return;
         }
         const videoData = this.state.playlist[this.state.currentIndex].data;
@@ -408,7 +443,7 @@ class VideoManager {
 
     handleProgressInput(e) {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, обработка прогресса невозможна');
+            console.warn('Плейлист пуст, обработка прогресса невозможна');
             return;
         }
         this.video.currentTime = e.target.value;
@@ -552,7 +587,8 @@ class VideoManager {
 
     playNextVideo() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, переход к следующему видео невозможен');
+            console.warn('Плейлист пуст, переход к следующему видео невозможен');
+            this.showNotification('Нет видео для воспроизведения');
             return;
         }
         this.recommendNextVideo();
@@ -562,7 +598,8 @@ class VideoManager {
 
     playPreviousVideo() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, переход к предыдущему видео невозможен');
+            console.warn('Плейлист пуст, переход к предыдущему видео невозможен');
+            this.showNotification('Нет видео для воспроизведения');
             return;
         }
         this.state.currentIndex = (this.state.currentIndex - 1 + this.state.playlist.length) % this.state.playlist.length;
@@ -572,7 +609,7 @@ class VideoManager {
 
     loadVideo(direction = 'left') {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, загрузка видео невозможна');
+            console.warn('Плейлист пуст, загрузка видео невозможна');
             this.showNotification('Нет видео для воспроизведения!');
             return;
         }
@@ -643,7 +680,7 @@ class VideoManager {
 
     async addComment() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, добавление комментария невозможно');
+            console.warn('Плейлист пуст, добавление комментария невозможно');
             return;
         }
         const videoData = this.state.playlist[this.state.currentIndex].data;
@@ -666,7 +703,7 @@ class VideoManager {
 
     updateComments() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, обновление комментариев невозможно');
+            console.warn('Плейлист пуст, обновление комментариев невозможно');
             return;
         }
         const videoData = this.state.playlist[this.state.currentIndex].data;
@@ -714,7 +751,7 @@ class VideoManager {
 
     async deleteComment(index) {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, удаление комментария невозможно');
+            console.warn('Плейлист пуст, удаление комментария невозможно');
             return;
         }
         if (confirm('Удалить этот комментарий?')) {
@@ -741,7 +778,7 @@ class VideoManager {
 
     updateDescription() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, обновление описания невозможно');
+            console.warn('Плейлист пуст, обновление описания невозможно');
             return;
         }
         let descriptionEl = document.getElementById('videoDescriptionDisplay');
@@ -755,7 +792,7 @@ class VideoManager {
 
     updateChat() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, обновление чата невозможно');
+            console.warn('Плейлист пуст, обновление чата невозможно');
             return;
         }
         const videoData = this.state.playlist[this.state.currentIndex].data;
@@ -771,7 +808,7 @@ class VideoManager {
 
     async sendChat() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, отправка сообщения невозможна');
+            console.warn('Плейлист пуст, отправка сообщения невозможна');
             return;
         }
         const videoData = this.state.playlist[this.state.currentIndex].data;
@@ -798,7 +835,7 @@ class VideoManager {
 
     shareViaTelegram() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, шаринг невозможен');
+            console.warn('Плейлист пуст, шаринг невозможен');
             return;
         }
         const videoUrl = this.state.playlist[this.state.currentIndex].url;
@@ -819,7 +856,7 @@ class VideoManager {
 
     copyVideoLink() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, копирование ссылки невозможно');
+            console.warn('Плейлист пуст, копирование ссылки невозможно');
             return;
         }
         const videoUrl = this.state.playlist[this.state.currentIndex].url;
@@ -878,11 +915,14 @@ class VideoManager {
         formData.append('description', description);
 
         try {
-            const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/upload-video', {
+            const response = await fetch(`${this.SERVER_URL}/api/upload-video`, {
                 method: 'POST',
                 body: formData
             });
-            if (!response.ok) throw new Error('Ошибка загрузки видео');
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Ошибка загрузки видео');
+            }
             const { url } = await response.json();
 
             this.showNotification('Видео успешно опубликовано!');
@@ -947,12 +987,15 @@ class VideoManager {
 
     async deleteVideo(url) {
         try {
-            const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/delete-video', {
+            const response = await fetch(`${this.SERVER_URL}/api/delete-video`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url, telegram_id: this.state.userId })
             });
-            if (!response.ok) throw new Error('Ошибка удаления видео');
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Ошибка удаления видео');
+            }
             this.showNotification('Видео успешно удалено!');
             const index = this.state.playlist.findIndex(v => v.url === url);
             if (index !== -1) {
@@ -982,7 +1025,7 @@ class VideoManager {
 
     updateCounters() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, обновление счётчиков невозможно');
+            console.warn('Плейлист пуст, обновление счётчиков невозможно');
             return;
         }
         const videoData = this.state.playlist[this.state.currentIndex].data;
@@ -1005,7 +1048,7 @@ class VideoManager {
 
     updateRating() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, обновление рейтинга невозможно');
+            console.warn('Плейлист пуст, обновление рейтинга невозможно');
             return;
         }
         const videoData = this.state.playlist[this.state.currentIndex].data;
@@ -1019,7 +1062,7 @@ class VideoManager {
 
     recommendNextVideo() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, рекомендации невозможны');
+            console.warn('Плейлист пуст, рекомендации невозможны');
             this.state.currentIndex = 0;
             return;
         }
@@ -1042,7 +1085,7 @@ class VideoManager {
 
     preloadNextVideo() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, предзагрузка невозможна');
+            console.warn('Плейлист пуст, предзагрузка невозможна');
             return;
         }
         this.cleanPreloadedVideos();
@@ -1078,7 +1121,7 @@ class VideoManager {
 
     async updateVideoCache(index) {
         if (!this.state.playlist || this.state.playlist.length === 0 || index < 0 || index >= this.state.playlist.length) {
-            console.error('Плейлист пуст или индекс некорректен, кэширование невозможно');
+            console.warn('Плейлист пуст или индекс некорректен, кэширование невозможно');
             return;
         }
         const videoData = this.state.playlist[index].data;
@@ -1102,12 +1145,15 @@ class VideoManager {
         localStorage.setItem(`videoData_${url}`, JSON.stringify(cacheData));
 
         try {
-            const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/update-video', {
+            const response = await fetch(`${this.SERVER_URL}/api/update-video`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(cacheData)
             });
-            if (!response.ok) throw new Error('Ошибка обновления данных');
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Ошибка обновления данных');
+            }
             console.log('Данные сохранены на сервере');
         } catch (error) {
             console.error('Ошибка обновления данных:', error);
@@ -1199,7 +1245,7 @@ class VideoManager {
             return;
         }
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, обработка реакции невозможна');
+            console.warn('Плейлист пуст, обработка реакции невозможна');
             return;
         }
         const videoData = this.state.playlist[this.state.currentIndex].data;
@@ -1275,59 +1321,49 @@ class VideoManager {
     async downloadCurrentVideo(e) {
         e.stopPropagation();
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, скачивание невозможно');
+            console.warn('Плейлист пуст, скачивание невозможно');
             this.showNotification('Нет видео для скачивания!');
             return;
         }
+
         const videoUrl = this.state.playlist[this.state.currentIndex].url;
         if (!videoUrl) {
             this.showNotification('Нет видео для скачивания!');
             return;
         }
 
-        this.uploadBtn.classList.add('downloading');
-        this.uploadBtn.style.setProperty('--progress', '0%');
+        this.downloadBtn.classList.add('downloading');
 
         try {
-            const response = await fetch(videoUrl, { mode: 'cors' });
-            if (!response.ok) throw new Error('Ошибка загрузки видео');
-
-            const total = Number(response.headers.get('content-length')) || 0;
-            let loaded = 0;
-            const chunks = [];
-
-            const reader = response.body.getReader();
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                chunks.push(value);
-                loaded += value.length;
-                const progress = total ? (loaded / total) * 100 : this.simulateProgress(loaded);
-                this.uploadBtn.style.setProperty('--progress', `${progress}%`);
+            const response = await fetch(`${this.SERVER_URL}/api/download-video?url=${encodeURIComponent(videoUrl)}`, {
+                mode: 'cors'
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Ошибка скачивания');
             }
 
-            const blob = new Blob(chunks, { type: 'video/mp4' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `video_${Date.now()}.mp4`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
+            const finalUrl = response.url;
+            if (this.tg?.openLink) {
+                this.tg.openLink(finalUrl);
+            } else {
+                window.open(finalUrl, '_blank');
+            }
 
-            this.showNotification('Видео успешно скачано!');
-        } catch (err) {
-            console.error('Ошибка скачивания:', err);
-            this.showNotification('Не удалось скачать видео!');
+            this.showNotification('Видео открыто для скачивания!');
+        } catch (error) {
+            console.error('Ошибка скачивания:', error);
+            this.showNotification(`Ошибка: ${error.message}`);
         } finally {
-            this.uploadBtn.classList.remove('downloading');
-            this.uploadBtn.style.setProperty('--progress', '0%');
+            this.downloadBtn.classList.remove('downloading');
         }
     }
 
-    simulateProgress(loaded) {
-        return Math.min(100, (loaded / (1024 * 1024)) * 10);
+    handleSubmenuUpload(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        this.videoUpload.click();
+        this.toggleSubmenu();
     }
 
     startDragging(e) {
@@ -1359,13 +1395,6 @@ class VideoManager {
         document.addEventListener('touchmove', onMove, { passive: false });
         document.addEventListener('mouseup', onEnd);
         document.addEventListener('touchend', onEnd);
-    }
-
-    handleSubmenuUpload(e) {
-        e.stopPropagation();
-        e.preventDefault();
-        this.videoUpload.click();
-        this.toggleSubmenu();
     }
 
     toggleFullscreen(e) {
