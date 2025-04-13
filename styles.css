@@ -1438,22 +1438,22 @@ body.telegram-fullscreen {
 
 @media (fullscreen) {
     #rating {
-        top: 15vh; /* Опускаем на 15vh в полноэкранном режиме */
+        top: 30vh; /* Опускаем в полноэкранном режиме */
         left: 2vw;
     }
     .view-count {
-        top: 15vh; /* Опускаем на 15vh в полноэкранном режиме */
+        top: 30vh; /* Опускаем в полноэкранном режиме */
         right: 2vw;
     }
 }
 
 body.telegram-fullscreen #rating {
-    top: 15vh; /* Опускаем на 15vh в Telegram fullscreen */
+    top: 30vh; /* Опускаем на 15vh в Telegram fullscreen */
     left: 2vw;
 }
 
 body.telegram-fullscreen .view-count {
-    top: 15vh; /* Опускаем на 15vh в Telegram fullscreen */
+    top: 30vh; /* Опускаем на 15vh в Telegram fullscreen */
     right: 2vw;
 }
 
