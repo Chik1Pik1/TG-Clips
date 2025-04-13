@@ -173,7 +173,7 @@ body {
 
 #rating {
     position: absolute;
-    top: 3vh;
+    top: 10vh; /* Опускаем ниже, чтобы избежать перекрытия Telegram */
     left: 2vw;
     display: flex;
     align-items: center;
@@ -188,9 +188,10 @@ body {
     z-index: 10;
 }
 
+/* Стили для счётчика просмотров */
 .view-count {
     position: absolute;
-    top: 3vh;
+    top: 10vh; /* Выравниваем на одном уровне с рейтингом */
     right: 2vw;
     display: flex;
     align-items: center;
@@ -552,6 +553,7 @@ body {
     100% { opacity: 0; transform: translate(-50%, 100px) scale(1); }
 }
 
+/* Стили для прогресс-бара */
 .progress-bar {
     position: absolute;
     top: 50%;
@@ -578,10 +580,12 @@ body {
     height: 100%;
     margin: 0;
     padding: 0;
-    -webkit-appearance: slider-vertical;
+    writing-mode: vertical-lr; /* Замена slider-vertical для вертикальной ориентации */
+    direction: rtl; /* Корректировка направления для правильного поведения */
     background: rgba(0, 0, 0, 0.7);
     border-radius: 5px;
     outline: none;
+    -webkit-appearance: none; /* Убираем стандартный вид */
 }
 
 .progress-bar input[type="range"]::-webkit-slider-runnable-track {
@@ -598,6 +602,23 @@ body {
     background: #fff;
     border-radius: 50%;
     cursor: pointer;
+    margin-left: -0.5px; /* Точная центровка ползунка */
+}
+
+.progress-bar input[type="range"]::-moz-range-track {
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 5px;
+    width: 14px;
+    height: 100%;
+}
+
+.progress-bar input[type="range"]::-moz-range-thumb {
+    width: 15px;
+    height: 15px;
+    background: #fff;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
 }
 
 .comments-window {
@@ -1418,24 +1439,25 @@ body.telegram-fullscreen {
     margin-bottom: 5px;
 }
 
+/* Стили для полноэкранного режима */
 @media (fullscreen) {
     #rating {
-        top: 8vh;
+        top: 10vh; /* Сохраняем позицию в полноэкранном режиме */
         left: 2vw;
     }
-    #viewCount {
-        top: 8vh;
+    .view-count { /* Исправлено: используем .view-count вместо #viewCount */
+        top: 10vh;
         right: 2vw;
     }
 }
 
 body.telegram-fullscreen #rating {
-    top: 8vh;
+    top: 10vh; /* Сохраняем позицию в Telegram fullscreen */
     left: 2vw;
 }
 
-body.telegram-fullscreen #viewCount {
-    top: 8vh;
+body.telegram-fullscreen .view-count { /* Исправлено: используем .view-count */
+    top: 10vh;
     right: 2vw;
 }
 
