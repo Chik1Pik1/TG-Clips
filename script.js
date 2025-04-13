@@ -37,7 +37,7 @@ class VideoManager {
     }
 
     async init() {
-        console.log('Скрипт обновлён, версия 10');
+        console.log('Скрипт обновлён, версия 11');
         if (this.tg?.initDataUnsafe?.user) {
             this.state.userId = String(this.tg.initDataUnsafe.user.id);
             console.log('Telegram инициализирован, userId:', this.state.userId);
@@ -284,7 +284,7 @@ class VideoManager {
         if (this.userAvatar && this.tg?.initDataUnsafe?.user?.photo_url) {
             this.userAvatar.src = this.tg.initDataUnsafe.user.photo_url;
         } else {
-            this.userAvatar.src = '/images/default-avatar.png'; // Локальный аватар
+            this.userAvatar.src = '/images/default-avatar.png';
         }
         this.initializeTheme();
         this.initializeTooltips();
@@ -297,42 +297,53 @@ class VideoManager {
             { url: "https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_5mb.mp4", data: this.createEmptyVideoData('testAuthor123') }
         ];
 
-        try {
-            console.log('Попытка загрузить видео с сервера...');
-            const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/public-videos');
-            console.log('Ответ /api/public-videos:', response.status);
-            if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
-            const data = await response.json();
-            console.log('Полученные данные:', data);
+        const maxRetries = 3;
+        let retries = 0;
 
-            if (!data || !Array.isArray(data) || data.length === 0) {
-                console.warn('Сервер вернул пустой или некорректный ответ, используем стоковые видео');
-                this.state.playlist = stockVideos;
-            } else {
-                this.state.playlist = data.map(video => ({
-                    url: video.url,
-                    data: {
-                        views: new Set(video.views || []),
-                        likes: video.likes || 0,
-                        dislikes: video.dislikes || 0,
-                        userLikes: new Set(video.user_likes || []),
-                        userDislikes: new Set(video.user_dislikes || []),
-                        comments: video.comments || [],
-                        shares: video.shares || 0,
-                        viewTime: video.view_time || 0,
-                        replays: video.replays || 0,
-                        duration: video.duration || 0,
-                        authorId: video.author_id,
-                        lastPosition: video.last_position || 0,
-                        chatMessages: video.chat_messages || [],
-                        description: video.description || ''
-                    }
-                }));
+        while (retries < maxRetries) {
+            try {
+                console.log(`Попытка загрузить видео с сервера (попытка ${retries + 1})...`);
+                const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/public-videos', {
+                    timeout: 10000
+                });
+                console.log('Ответ /api/public-videos:', response.status);
+                if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
+                const data = await response.json();
+                console.log('Полученные данные:', data);
+
+                if (!data || !Array.isArray(data) || data.length === 0) {
+                    console.warn('Сервер вернул пустой или некорректный ответ, используем стоковые видео');
+                    this.state.playlist = stockVideos;
+                } else {
+                    this.state.playlist = data.map(video => ({
+                        url: video.url,
+                        data: {
+                            views: new Set(video.views || []),
+                            likes: video.likes || 0,
+                            dislikes: video.dislikes || 0,
+                            userLikes: new Set(video.user_likes || []),
+                            userDislikes: new Set(video.user_dislikes || []),
+                            comments: video.comments || [],
+                            shares: video.shares || 0,
+                            viewTime: video.view_time || 0,
+                            replays: video.replays || 0,
+                            duration: video.duration || 0,
+                            authorId: video.author_id,
+                            lastPosition: video.last_position || 0,
+                            chatMessages: video.chat_messages || [],
+                            description: video.description || ''
+                        }
+                    }));
+                }
+                break;
+            } catch (error) {
+                console.error('Ошибка загрузки видео с сервера:', error);
+                retries++;
+                if (retries === maxRetries) {
+                    this.showNotification(`Не удалось загрузить видео с сервера: ${error.message}`);
+                    this.state.playlist = stockVideos;
+                }
             }
-        } catch (error) {
-            console.error('Ошибка загрузки видео с сервера:', error);
-            this.showNotification(`Не удалось загрузить видео с сервера: ${error.message}`);
-            this.state.playlist = stockVideos;
         }
 
         console.log('Итоговый плейлист:', this.state.playlist);
@@ -469,9 +480,7 @@ class VideoManager {
         this.state.startX = e.touches[0].clientX;
         this.state.startY = e.touches[0].clientY;
         this.state.isSwiping = false;
-        this.state.touchTimeout = setTimeout(() => {
-            if (!this.state.isSwiping) this.toggleVideoPlayback();
-        }, 230); // Увеличено до 500 мс для предотвращения случайных пауз
+        this.toggleVideoPlayback(); // Мгновенная пауза/воспроизведение
     }
 
     handleTouchMove(e) {
@@ -481,20 +490,15 @@ class VideoManager {
     }
 
     handleTouchEnd(e) {
-        if (this.state.touchTimeout) {
-            clearTimeout(this.state.touchTimeout);
-            this.state.touchTimeout = null;
-        }
+        if (!this.state.isSwiping) return;
 
         const deltaX = this.state.endX - this.state.startX;
         const deltaY = this.state.endY - this.state.startY;
         const swipeThresholdHorizontal = 50;
         const swipeThresholdVertical = 50;
-        const minMovement = 10; // Минимальное движение для свайпа
+        const minMovement = 10;
 
-        if (Math.abs(deltaX) < minMovement && Math.abs(deltaY) < minMovement) {
-            return; // Игнорируем мелкие движения
-        }
+        if (Math.abs(deltaX) < minMovement && Math.abs(deltaY) < minMovement) return;
 
         if (!this.state.userId) {
             this.showNotification('Войдите, чтобы ставить реакции');
@@ -525,9 +529,7 @@ class VideoManager {
         this.state.startX = e.clientX;
         this.state.startY = e.clientY;
         this.state.isSwiping = false;
-        this.state.touchTimeout = setTimeout(() => {
-            if (!this.state.isSwiping) this.toggleVideoPlayback();
-        }, 230);
+        this.toggleVideoPlayback(); // Мгновенная пауза/воспроизведение
     }
 
     handleMouseMove(e) {
@@ -540,11 +542,7 @@ class VideoManager {
     handleMouseEnd(e) {
         if (!this.state.isDragging) return;
         this.state.isDragging = false;
-
-        if (this.state.touchTimeout) {
-            clearTimeout(this.state.touchTimeout);
-            this.state.touchTimeout = null;
-        }
+        if (!this.state.isSwiping) return;
 
         const deltaX = this.state.endX - this.state.startX;
         const deltaY = this.state.endY - this.state.startY;
@@ -552,9 +550,7 @@ class VideoManager {
         const swipeThresholdVertical = 50;
         const minMovement = 10;
 
-        if (Math.abs(deltaX) < minMovement && Math.abs(deltaY) < minMovement) {
-            return;
-        }
+        if (Math.abs(deltaX) < minMovement && Math.abs(deltaY) < minMovement) return;
 
         if (!this.state.userId) {
             this.showNotification('Войдите, чтобы ставить реакции');
@@ -730,6 +726,7 @@ class VideoManager {
                 ${isOwnComment ? `<button class="delete-comment-btn" data-index="${idx}">Удалить</button>` : ''}
             `;
             this.commentsList.appendChild(commentEl);
+            commentಸ 3 * commentEl.querySelector('.comment').addEventListener('click', () => this.handleAvatarClick(comment.userId));
             commentEl.querySelector('.reply-btn').addEventListener('click', () => this.replyToComment(idx));
             if (isOwnComment) {
                 commentEl.querySelector('.delete-comment-btn').addEventListener('click', () => this.deleteComment(idx));
@@ -964,7 +961,6 @@ class VideoManager {
                 this.uploadPreview.style.display = 'none';
             }
 
-            // Создаём данные для нового видео с описанием
             const newVideoData = this.createEmptyVideoData(this.state.userId);
             newVideoData.description = description;
             this.state.playlist.unshift({ url, data: newVideoData });
@@ -1385,44 +1381,65 @@ class VideoManager {
         this.uploadBtn.classList.add('downloading');
         this.uploadBtn.style.setProperty('--progress', '0%');
 
-        try {
-            const response = await fetch(`https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/download-video?url=${encodeURIComponent(videoUrl)}`, { mode: 'cors' });
-            console.log('Статус ответа:', response.status, response.statusText);
-            if (!response.ok) throw new Error(`Ошибка загрузки: ${response.status} ${response.statusText}`);
+        const maxRetries = 3;
+        let retries = 0;
 
-            const total = Number(response.headers.get('content-length')) || 0;
-            let loaded = 0;
-            const chunks = [];
+        while (retries < maxRetries) {
+            try {
+                console.log(`Попытка скачивания ${retries + 1}/${maxRetries}`);
+                const response = await fetch(`https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/download-video?url=${encodeURIComponent(videoUrl)}`, {
+                    mode: 'cors'
+                });
+                console.log('Ответ сервера:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: Object.fromEntries(response.headers.entries())
+                });
 
-            const reader = response.body.getReader();
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                chunks.push(value);
-                loaded += value.length;
-                const progress = total ? (loaded / total) * 100 : this.simulateProgress(loaded);
-                console.log('Прогресс:', progress);
-                this.uploadBtn.style.setProperty('--progress', `${progress}%`);
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(`Ошибка сервера: ${response.status} ${response.statusText} - ${errorData.error || 'Неизвестная ошибка'}`);
+                }
+
+                const total = Number(response.headers.get('content-length')) || 0;
+                let loaded = 0;
+                const chunks = [];
+
+                const reader = response.body.getReader();
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    chunks.push(value);
+                    loaded += value.length;
+                    const progress = total ? (loaded / total) * 100 : this.simulateProgress(loaded);
+                    console.log('Прогресс скачивания:', progress.toFixed(2), '%');
+                    this.uploadBtn.style.setProperty('--progress', `${progress}%`);
+                }
+
+                const contentType = response.headers.get('content-type') || 'video/mp4';
+                const blob = new Blob(chunks, { type: contentType });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `video_${Date.now()}.mp4`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                this.showNotification('Видео успешно скачано!');
+                break;
+            } catch (err) {
+                console.error(`Ошибка скачивания (попытка ${retries + 1}):`, err);
+                retries++;
+                if (retries === maxRetries) {
+                    this.showNotification(`Не удалось скачать видео: ${err.message}`);
+                }
             }
-
-            const blob = new Blob(chunks, { type: response.headers.get('content-type') || 'video/mp4' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `video_${Date.now()}.mp4`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-
-            this.showNotification('Видео успешно скачано!');
-        } catch (err) {
-            console.error('Ошибка скачивания:', err);
-            this.showNotification(`Не удалось скачать видео: ${err.message}`);
-        } finally {
-            this.uploadBtn.classList.remove('downloading');
-            this.uploadBtn.style.setProperty('--progress', '0%');
         }
+
+        this.uploadBtn.classList.remove('downloading');
+        this.uploadBtn.style.setProperty('--progress', '0%');
     }
 
     simulateProgress(loaded) {
