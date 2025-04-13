@@ -527,7 +527,7 @@ class VideoManager {
         this.state.isSwiping = false;
         this.state.touchTimeout = setTimeout(() => {
             if (!this.state.isSwiping) this.toggleVideoPlayback();
-        }, 500);
+        }, 230);
     }
 
     handleMouseMove(e) {
