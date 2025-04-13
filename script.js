@@ -195,10 +195,17 @@ class VideoManager {
                 const channel = this.state.channels[this.state.userId];
                 if (channel?.link) {
                     console.log('Переход на канал:', channel.link);
-                    if (this.tg?.version && parseFloat(this.tg.version) >= 6.0) {
-                        this.tg.openTelegramLink(channel.link);
-                    } else {
-                        window.open(channel.link, '_blank');
+                    try {
+                        if (this.tg?.version && parseFloat(this.tg.version) >= 6.0) {
+                            this.tg.openTelegramLink(channel.link);
+                            console.log('Вызван tg.openTelegramLink:', channel.link);
+                        } else {
+                            window.open(channel.link, '_blank');
+                            console.log('Открыт в новой вкладке:', channel.link);
+                        }
+                    } catch (error) {
+                        console.error('Ошибка перехода на канал:', error);
+                        this.showNotification('Не удалось открыть канал!');
                     }
                 } else {
                     this.showNotification('Канал не зарегистрирован. Зарегистрируйте его!');
@@ -254,16 +261,19 @@ class VideoManager {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ telegram_id: this.state.userId, channel_link: channelLink })
                 });
-                console.log('Ответ /api/register-channel:', response.status, await response.text());
-                if (!response.ok) throw new Error('Ошибка сервера');
-                const result = await response.json();
+                console.log('Ответ /api/register-channel:', response.status);
+                const responseText = await response.text();
+                console.log('Тело ответа:', responseText);
+                if (!response.ok) throw new Error(`Ошибка сервера: ${response.status} ${responseText}`);
+                const result = JSON.parse(responseText);
                 this.state.channels[this.state.userId] = { videos: [], link: channelLink };
                 localStorage.setItem('channels', JSON.stringify(this.state.channels));
+                console.log('Каналы после регистрации:', this.state.channels);
                 this.showNotification('Канал успешно зарегистрирован!');
                 this.showPlayer();
             } catch (error) {
                 console.error('Ошибка регистрации канала:', error);
-                this.showNotification('Ошибка при регистрации канала!');
+                this.showNotification(`Ошибка при регистрации канала: ${error.message}`);
             }
         } else {
             this.showNotification('Введите корректную ссылку на Telegram-канал.');
@@ -274,7 +284,7 @@ class VideoManager {
         if (this.userAvatar && this.tg?.initDataUnsafe?.user?.photo_url) {
             this.userAvatar.src = this.tg.initDataUnsafe.user.photo_url;
         } else {
-            this.userAvatar.src = 'https://placehold.co/30';
+            this.userAvatar.src = '/images/default-avatar.png'; // Локальный аватар
         }
         this.initializeTheme();
         this.initializeTooltips();
@@ -290,7 +300,7 @@ class VideoManager {
         try {
             console.log('Попытка загрузить видео с сервера...');
             const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/public-videos');
-            console.log('Ответ /api/public-videos:', response.status, await response.text());
+            console.log('Ответ /api/public-videos:', response.status);
             if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
             const data = await response.json();
             console.log('Полученные данные:', data);
@@ -703,7 +713,7 @@ class VideoManager {
         videoData.comments.forEach((comment, idx) => {
             const userPhoto = (this.tg?.initDataUnsafe?.user?.id === comment.userId && this.tg?.initDataUnsafe?.user?.photo_url)
                 ? this.tg.initDataUnsafe.user.photo_url
-                : 'https://placehold.co/30';
+                : '/images/default-avatar.png';
             const username = (this.tg?.initDataUnsafe?.user?.id === comment.userId && this.tg?.initDataUnsafe?.user?.username)
                 ? `@${this.tg.initDataUnsafe.user.username}`
                 : `User_${comment.userId.slice(0, 5)}`;
@@ -930,9 +940,11 @@ class VideoManager {
                 method: 'POST',
                 body: formData
             });
-            console.log('Ответ /api/upload-video:', response.status, await response.text());
-            if (!response.ok) throw new Error('Ошибка загрузки видео');
-            const { url } = await response.json();
+            console.log('Ответ /api/upload-video:', response.status);
+            const responseText = await response.text();
+            console.log('Тело ответа:', responseText);
+            if (!response.ok) throw new Error(`Ошибка загрузки видео: ${response.status} ${responseText}`);
+            const { url } = JSON.parse(responseText);
             console.log('Полученный URL:', url);
 
             this.showNotification('Видео успешно опубликовано!');
@@ -1002,8 +1014,10 @@ class VideoManager {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url, telegram_id: this.state.userId })
             });
-            console.log('Ответ /api/delete-video:', response.status, await response.text());
-            if (!response.ok) throw new Error('Ошибка удаления видео');
+            console.log('Ответ /api/delete-video:', response.status);
+            const responseText = await response.text();
+            console.log('Тело ответа:', responseText);
+            if (!response.ok) throw new Error(`Ошибка удаления видео: ${response.status} ${responseText}`);
             this.showNotification('Видео успешно удалено!');
             const index = this.state.playlist.findIndex(v => v.url === url);
             if (index !== -1) {
@@ -1159,8 +1173,10 @@ class VideoManager {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(cacheData)
             });
-            console.log('Ответ /api/update-video:', response.status, await response.text());
-            if (!response.ok) throw new Error('Ошибка обновления данных');
+            console.log('Ответ /api/update-video:', response.status);
+            const responseText = await response.text();
+            console.log('Тело ответа:', responseText);
+            if (!response.ok) throw new Error(`Ошибка обновления данных: ${response.status} ${responseText}`);
             console.log('Данные сохранены на сервере');
         } catch (error) {
             console.error('Ошибка обновления данных:', error);
@@ -1230,7 +1246,7 @@ class VideoManager {
         let inThrottle;
         return function (...args) {
             if (!inThrottle) {
-                func.apply(this, args);
+                func.func.apply(this, args);
                 inThrottle = true;
                 setTimeout(() => inThrottle = false, limit);
             }
@@ -1344,9 +1360,9 @@ class VideoManager {
         this.uploadBtn.style.setProperty('--progress', '0%');
 
         try {
-            const response = await fetch(videoUrl, { mode: 'cors' });
+            const response = await fetch(`https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/proxy-video?url=${encodeURIComponent(videoUrl)}`, { mode: 'cors' });
             console.log('Статус ответа:', response.status, response.statusText);
-            if (!response.ok) throw new Error(`Ошибка загрузки: ${response.statusText}`);
+            if (!response.ok) throw new Error(`Ошибка загрузки: ${response.status} ${response.statusText}`);
 
             const total = Number(response.headers.get('content-length')) || 0;
             let loaded = 0;
@@ -1363,7 +1379,7 @@ class VideoManager {
                 this.uploadBtn.style.setProperty('--progress', `${progress}%`);
             }
 
-            const blob = new Blob(chunks, { type: 'video/mp4' });
+            const blob = new Blob(chunks, { type: response.headers.get('content-type') || 'video/mp4' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -1376,7 +1392,7 @@ class VideoManager {
             this.showNotification('Видео успешно скачано!');
         } catch (err) {
             console.error('Ошибка скачивания:', err);
-            this.showNotification('Не удалось скачать видео!');
+            this.showNotification(`Не удалось скачать видео: ${err.message}`);
         } finally {
             this.uploadBtn.classList.remove('downloading');
             this.uploadBtn.style.setProperty('--progress', '0%');
