@@ -158,6 +158,52 @@ class VideoManager {
         bindButton(document.querySelector('.fullscreen-btn'), (e) => this.toggleFullscreen(e), '.fullscreen-btn');
         document.addEventListener('click', (e) => this.hideManagementListOnClickOutside(e));
         this.bindUserAvatar();
+
+        // Привязываем события для adjustElementsForTelegram
+        window.addEventListener('resize', () => this.adjustElementsForTelegram());
+        this.classObserver = new MutationObserver(() => this.adjustElementsForTelegram());
+        this.classObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    adjustElementsForTelegram() {
+        const isTelegramFullscreen = document.body.classList.contains('telegram-fullscreen');
+        const rating = this.ratingEl;
+        const viewCount = document.querySelector('.view-count');
+
+        if (isTelegramFullscreen) {
+            // Проверяем высоту окна и задаем отступ
+            const offset = window.innerHeight * 0.15; // 15vh в пикселях
+            if (rating) {
+                rating.style.position = 'fixed';
+                rating.style.bottom = `${offset}px`;
+                rating.style.left = '2vw';
+                rating.style.top = 'auto';
+                rating.style.zIndex = '999999';
+            }
+            if (viewCount) {
+                viewCount.style.position = 'fixed';
+                viewCount.style.bottom = `${offset}px`;
+                viewCount.style.right = '2vw';
+                viewCount.style.top = 'auto';
+                viewCount.style.zIndex = '999999';
+            }
+        } else {
+            // Восстанавливаем стандартные стили
+            if (rating) {
+                rating.style.position = 'absolute';
+                rating.style.top = '2vh';
+                rating.style.left = '2vw';
+                rating.style.bottom = 'auto';
+                rating.style.zIndex = '';
+            }
+            if (viewCount) {
+                viewCount.style.position = 'absolute';
+                viewCount.style.top = '2vh';
+                viewCount.style.right = '2vw';
+                viewCount.style.bottom = 'auto';
+                viewCount.style.zIndex = '';
+            }
+        }
     }
 
     handleAuth() {
@@ -176,6 +222,7 @@ class VideoManager {
             this.authScreen.style.display = 'none';
             this.playerContainer.style.display = 'flex';
             this.initializePlayer();
+            this.adjustElementsForTelegram(); // Вызываем при показе плеера
         } else {
             console.error('Ошибка: authScreen или playerContainer не найдены');
         }
@@ -1480,24 +1527,32 @@ class VideoManager {
             this.tg.requestFullscreen()
                 .then(() => {
                     document.body.classList.add('telegram-fullscreen');
+                    this.adjustElementsForTelegram();
                     this.showNotification('Полноэкранный режим включён');
                 })
                 .catch((err) => {
                     console.error('Ошибка полноэкранного режима Telegram:', err);
                     this.tg.expand();
+                    this.adjustElementsForTelegram();
                     this.showNotification('Полноэкранный режим недоступен, использовано расширение');
                 });
         } else if (!this.tg) {
             if (!document.fullscreenElement) {
                 document.documentElement.requestFullscreen()
-                    .then(() => document.body.classList.add('fullscreen-mode'))
+                    .then(() => {
+                        document.body.classList.add('fullscreen-mode');
+                        this.adjustElementsForTelegram();
+                    })
                     .catch(err => {
                         console.error('Ошибка полноэкранного режима:', err);
                         this.showNotification('Полноэкранный режим не поддерживается');
                     });
             } else {
                 document.exitFullscreen()
-                    .then(() => document.body.classList.remove('fullscreen-mode'))
+                    .then(() => {
+                        document.body.classList.remove('fullscreen-mode');
+                        this.adjustElementsForTelegram();
+                    })
                     .catch(err => console.error('Ошибка выхода из полноэкранного режима:', err));
             }
         } else {
