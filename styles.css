@@ -55,10 +55,10 @@ body {
     justify-content: center;
     align-items: center;
     width: 100%;
-    height: 100vh;
+    height: 100vh; /* Изменено на vh для точности */
     background: linear-gradient(135deg, #1a73e8, #34c0eb);
     animation: gradientShift 10s ease infinite;
-    overflow-y: auto;
+    overflow-y: auto; /* Разрешена прокрутка при необходимости */
 }
 
 @keyframes gradientShift {
@@ -81,10 +81,10 @@ body {
     justify-content: center;
     align-items: center;
     min-height: 200px;
-    max-height: 90vh;
-    overflow-y: auto;
-    opacity: 1;
-    transform: translateY(0);
+    max-height: 90vh; /* Ограничение высоты */
+    overflow-y: auto; /* Прокрутка внутри контейнера */
+    opacity: 1; /* Явное финальное состояние */
+    transform: translateY(0); /* Явное финальное состояние */
 }
 
 @keyframes fadeInUp {
@@ -125,14 +125,14 @@ body {
     border-radius: 25px;
     font-size: 18px;
     cursor: pointer;
-    transition: background 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+    transition: background 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease; /* Ограниченный transition */
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 10px;
     box-shadow: 0 5px 15px rgba(0, 136, 204, 0.3);
     position: relative;
-    z-index: 1000;
+    z-index: 1000; /* Увеличен z-index */
 }
 
 .auth-btn:hover {
@@ -173,7 +173,7 @@ body {
 
 #rating {
     position: absolute;
-    top: 10vh;
+    top: 4vh; 
     left: 2vw;
     display: flex;
     align-items: center;
@@ -188,9 +188,10 @@ body {
     z-index: 10;
 }
 
+/* Стили для счётчика просмотров */
 .view-count {
     position: absolute;
-    top: 10vh;
+    top: 2vh; 
     right: 2vw;
     display: flex;
     align-items: center;
@@ -269,9 +270,7 @@ body {
     pointer-events: auto;
 }
 
-.bottom-buttons,
-.reaction-bar,
-.toggle-reaction-bar {
+.bottom-buttons, .reaction-bar, .toggle-reaction-bar {
     pointer-events: auto;
 }
 
@@ -384,8 +383,7 @@ body {
     min-width: 180px;
 }
 
-#userAvatar,
-#playerAvatar {
+#userAvatar, #playerAvatar {
     width: 40px;
     height: 40px;
     border-radius: 50%;
@@ -394,8 +392,7 @@ body {
     transition: transform 0.3s ease;
 }
 
-#userAvatar:hover,
-#playerAvatar:hover {
+#userAvatar:hover, #playerAvatar:hover {
     transform: scale(1.1);
 }
 
@@ -556,6 +553,7 @@ body {
     100% { opacity: 0; transform: translate(-50%, 100px) scale(1); }
 }
 
+/* Стили для прогресс-бара */
 .progress-bar {
     position: absolute;
     top: 50%;
@@ -582,12 +580,12 @@ body {
     height: 100%;
     margin: 0;
     padding: 0;
-    writing-mode: vertical-lr;
-    direction: rtl;
+    writing-mode: vertical-lr; /* Замена slider-vertical для вертикальной ориентации */
+    direction: rtl; /* Корректировка направления для правильного поведения */
     background: rgba(0, 0, 0, 0.7);
     border-radius: 5px;
     outline: none;
-    -webkit-appearance: none;
+    -webkit-appearance: none; /* Убираем стандартный вид */
 }
 
 .progress-bar input[type="range"]::-webkit-slider-runnable-track {
@@ -604,7 +602,7 @@ body {
     background: #fff;
     border-radius: 50%;
     cursor: pointer;
-    margin-left: -0.5px;
+    margin-left: -0.5px; /* Точная центровка ползунка */
 }
 
 .progress-bar input[type="range"]::-moz-range-track {
@@ -1170,8 +1168,7 @@ body:not(.dark) #videoDescriptionDisplay {
         padding: 6px 10px;
         min-width: 160px;
     }
-    #userAvatar,
-    #playerAvatar {
+    #userAvatar, #playerAvatar {
         width: 35px;
         height: 35px;
     }
@@ -1213,6 +1210,7 @@ body:not(.dark) #videoDescriptionDisplay {
         bottom: 2vh;
         right: 1vw;
     }
+    /* Добавлены адаптивные стили для кнопок авторизации */
     .auth-btn {
         padding: 10px 20px;
         font-size: 16px;
@@ -1326,8 +1324,7 @@ body:not(.dark) #videoDescriptionDisplay {
     padding: 0;
 }
 
-html,
-body {
+html, body {
     height: 100%;
     margin: 0;
     padding: 0;
@@ -1365,7 +1362,7 @@ body {
     border-radius: 25px;
     font-size: 16px;
     cursor: pointer;
-    transition: background 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+    transition: background 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease; /* Ограниченный transition */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1373,7 +1370,7 @@ body {
     box-shadow: 0 5px 15px rgba(0, 136, 204, 0.3);
     margin-top: 15px;
     position: relative;
-    z-index: 1000;
+    z-index: 1000; /* Увеличен z-index */
 }
 
 .register-channel-btn:hover {
@@ -1387,8 +1384,7 @@ body {
     box-shadow: 0 3px 10px rgba(0, 136, 204, 0.2);
 }
 
-.auth-btn,
-.register-channel-btn {
+.auth-btn, .register-channel-btn {
     pointer-events: auto;
     opacity: 1;
 }
@@ -1443,62 +1439,57 @@ body.telegram-fullscreen {
     margin-bottom: 5px;
 }
 
-.download-btn {
-    background: #28a745;
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 10px;
-    cursor: pointer;
-    transition: background 0.3s;
-}
-
-.download-btn:hover {
-    background: #218838;
-}
-
-.download-btn.downloading {
-    background: #ffc107;
-    position: relative;
-    overflow: hidden;
-}
-
-.download-btn.downloading::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: var(--progress, 0%);
-    height: 100%;
-    background: rgba(0, 0, 0, 0.3);
-    transition: width 0.1s linear;
-}
-
-/* Стили для полноэкранного режима и Telegram */
-@media (fullscreen), (body:fullscreen) {
+/* Стили для полноэкранного режима */
+@media (fullscreen) {
     #rating {
-        top: 10vh;
+        top: 15vh; /* Сохраняем позицию в полноэкранном режиме */
         left: 2vw;
     }
-    .view-count {
-        top: 10vh;
+    .view-count { /* Исправлено: используем .view-count вместо #viewCount */
+        top: 15vh;
         right: 2vw;
     }
 }
 
-body.telegram-fullscreen #rating,
-body:fullscreen #rating {
-    top: 10vh;
+body.telegram-fullscreen #rating {
+    top: 15vh; /* Сохраняем позицию в Telegram fullscreen */
     left: 2vw;
 }
 
-body.telegram-fullscreen .view-count,
-body:fullscreen .view-count {
-    top: 10vh;
+body.telegram-fullscreen .view-count { /* Исправлено: используем .view-count */
+    top: 15vh;
     right: 2vw;
+}
+
+.download-btn {
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 10px;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+.download-btn:hover {
+  background: #218838;
+}
+.download-btn.downloading {
+  background: #ffc107;
+  position: relative;
+  overflow: hidden;
+}
+.download-btn.downloading::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--progress, 0%);
+  height: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  transition: width 0.1s linear;
 }
