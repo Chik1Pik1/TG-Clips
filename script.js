@@ -284,7 +284,7 @@ class VideoManager {
         if (this.userAvatar && this.tg?.initDataUnsafe?.user?.photo_url) {
             this.userAvatar.src = this.tg.initDataUnsafe.user.photo_url;
         } else {
-            this.userAvatar.src = '/images/default-avatar.png';
+            this.userAvatar.src = '/images/default-avatar.png'; // Локальный аватар
         }
         this.initializeTheme();
         this.initializeTooltips();
@@ -471,7 +471,7 @@ class VideoManager {
         this.state.isSwiping = false;
         this.state.touchTimeout = setTimeout(() => {
             if (!this.state.isSwiping) this.toggleVideoPlayback();
-        }, 250); // Изменено с 500 мс на 250 мс
+        }, 500); // Увеличено до 500 мс для предотвращения случайных пауз
     }
 
     handleTouchMove(e) {
@@ -490,10 +490,10 @@ class VideoManager {
         const deltaY = this.state.endY - this.state.startY;
         const swipeThresholdHorizontal = 50;
         const swipeThresholdVertical = 50;
-        const minMovement = 10;
+        const minMovement = 10; // Минимальное движение для свайпа
 
         if (Math.abs(deltaX) < minMovement && Math.abs(deltaY) < minMovement) {
-            return;
+            return; // Игнорируем мелкие движения
         }
 
         if (!this.state.userId) {
@@ -527,7 +527,7 @@ class VideoManager {
         this.state.isSwiping = false;
         this.state.touchTimeout = setTimeout(() => {
             if (!this.state.isSwiping) this.toggleVideoPlayback();
-        }, 250); // Изменено с 500 мс на 250 мс
+        }, 500);
     }
 
     handleMouseMove(e) {
@@ -894,7 +894,7 @@ class VideoManager {
         console.log('Выбранный файл:', this.state.uploadedFile.name, this.state.uploadedFile.size, this.state.uploadedFile.type);
         if (this.state.uploadedFile.size > maxSize) {
             this.showNotification('Файл слишком большой! Максимум 100 МБ.');
-            UND this.state.uploadedFile = null;
+            this.state.uploadedFile = null;
             return;
         }
 
@@ -964,6 +964,7 @@ class VideoManager {
                 this.uploadPreview.style.display = 'none';
             }
 
+            // Создаём данные для нового видео с описанием
             const newVideoData = this.createEmptyVideoData(this.state.userId);
             newVideoData.description = description;
             this.state.playlist.unshift({ url, data: newVideoData });
@@ -1385,11 +1386,26 @@ class VideoManager {
         this.uploadBtn.style.setProperty('--progress', '0%');
 
         try {
-            const response = await fetch(videoUrl, { mode: 'cors' });
+            const response = await fetch(`https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/download-video?url=${encodeURIComponent(videoUrl)}`, { mode: 'cors' });
             console.log('Статус ответа:', response.status, response.statusText);
             if (!response.ok) throw new Error(`Ошибка загрузки: ${response.status} ${response.statusText}`);
 
-            const blob = await response.blob();
+            const total = Number(response.headers.get('content-length')) || 0;
+            let loaded = 0;
+            const chunks = [];
+
+            const reader = response.body.getReader();
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value);
+                loaded += value.length;
+                const progress = total ? (loaded / total) * 100 : this.simulateProgress(loaded);
+                console.log('Прогресс:', progress);
+                this.uploadBtn.style.setProperty('--progress', `${progress}%`);
+            }
+
+            const blob = new Blob(chunks, { type: response.headers.get('content-type') || 'video/mp4' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
