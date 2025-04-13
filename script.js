@@ -196,7 +196,7 @@ class VideoManager {
                 if (channel?.link) {
                     console.log('Переход на канал:', channel.link);
                     try {
-                        if (this.tg?.version && parseFloat(this.tg.version) >= 6.0) {
+                        if (this.tg && this.tg.openTelegramLink) {
                             this.tg.openTelegramLink(channel.link);
                             console.log('Вызван tg.openTelegramLink:', channel.link);
                         } else {
@@ -468,34 +468,32 @@ class VideoManager {
         e.preventDefault();
         this.state.startX = e.touches[0].clientX;
         this.state.startY = e.touches[0].clientY;
-        this.state.touchTimeout = setTimeout(() => this.toggleVideoPlayback(), 200);
         this.state.isSwiping = false;
+        this.state.touchTimeout = setTimeout(() => {
+            if (!this.state.isSwiping) this.toggleVideoPlayback();
+        }, 500); // Увеличено до 500 мс для предотвращения случайных пауз
     }
 
     handleTouchMove(e) {
         this.state.endX = e.touches[0].clientX;
         this.state.endY = e.touches[0].clientY;
-        const deltaX = this.state.endX - this.state.startX;
-        const deltaY = this.state.endY - this.state.startY;
-
-        if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
-            clearTimeout(this.state.touchTimeout);
-            this.state.touchTimeout = null;
-            this.state.isSwiping = true;
-        }
+        this.state.isSwiping = true;
     }
 
     handleTouchEnd(e) {
+        if (this.state.touchTimeout) {
+            clearTimeout(this.state.touchTimeout);
+            this.state.touchTimeout = null;
+        }
+
         const deltaX = this.state.endX - this.state.startX;
         const deltaY = this.state.endY - this.state.startY;
         const swipeThresholdHorizontal = 50;
         const swipeThresholdVertical = 50;
+        const minMovement = 10; // Минимальное движение для свайпа
 
-        if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) return;
-
-        if (this.state.touchTimeout) {
-            clearTimeout(this.state.touchTimeout);
-            this.state.touchTimeout = null;
+        if (Math.abs(deltaX) < minMovement && Math.abs(deltaY) < minMovement) {
+            return; // Игнорируем мелкие движения
         }
 
         if (!this.state.userId) {
@@ -503,16 +501,17 @@ class VideoManager {
             return;
         }
 
+        console.log('Свайп: deltaX=', deltaX, 'deltaY=', deltaY);
         if (Math.abs(deltaX) > swipeThresholdHorizontal && Math.abs(deltaX) > Math.abs(deltaY)) {
             if (deltaX > 0) this.playNextVideo();
             else this.playPreviousVideo();
             if (this.state.isProgressBarActivated) this.progressBar.classList.remove('visible');
             this.state.isProgressBarActivated = false;
-        } else if (Math.abs(deltaY) > swipeThresholdVertical) {
+        } else if (Math.abs(deltaY) > swipeThresholdVertical && Math.abs(deltaY) > Math.abs(deltaX)) {
             if (deltaY < 0) {
                 this.handleReaction('like');
                 this.showFloatingReaction('like', this.state.endX, this.state.startY);
-            } else {
+            } else if (deltaY > 0) {
                 this.handleReaction('dislike');
                 this.showFloatingReaction('dislike', this.state.endX, this.state.startY);
             }
@@ -525,36 +524,36 @@ class VideoManager {
         this.state.isDragging = true;
         this.state.startX = e.clientX;
         this.state.startY = e.clientY;
-        this.state.touchTimeout = setTimeout(() => this.toggleVideoPlayback(), 200);
         this.state.isSwiping = false;
+        this.state.touchTimeout = setTimeout(() => {
+            if (!this.state.isSwiping) this.toggleVideoPlayback();
+        }, 500);
     }
 
     handleMouseMove(e) {
         if (!this.state.isDragging) return;
         this.state.endX = e.clientX;
         this.state.endY = e.clientY;
-        const deltaX = this.state.endX - this.state.startX;
-        const deltaY = this.state.endY - this.state.startY;
-        if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
-            clearTimeout(this.state.touchTimeout);
-            this.state.touchTimeout = null;
-            this.state.isSwiping = true;
-        }
+        this.state.isSwiping = true;
     }
 
     handleMouseEnd(e) {
         if (!this.state.isDragging) return;
         this.state.isDragging = false;
-        const deltaX = this.state.endX - this.state.startX;
-        const deltaY = this.state.endY - this.state.startY;
-        const swipeThresholdHorizontal = 50;
-        const swipeThresholdVertical = 50;
-
-        if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) return;
 
         if (this.state.touchTimeout) {
             clearTimeout(this.state.touchTimeout);
             this.state.touchTimeout = null;
+        }
+
+        const deltaX = this.state.endX - this.state.startX;
+        const deltaY = this.state.endY - this.state.startY;
+        const swipeThresholdHorizontal = 50;
+        const swipeThresholdVertical = 50;
+        const minMovement = 10;
+
+        if (Math.abs(deltaX) < minMovement && Math.abs(deltaY) < minMovement) {
+            return;
         }
 
         if (!this.state.userId) {
@@ -562,16 +561,17 @@ class VideoManager {
             return;
         }
 
+        console.log('Свайп мышью: deltaX=', deltaX, 'deltaY=', deltaY);
         if (Math.abs(deltaX) > swipeThresholdHorizontal && Math.abs(deltaX) > Math.abs(deltaY)) {
             if (deltaX > 0) this.playNextVideo();
             else this.playPreviousVideo();
             if (this.state.isProgressBarActivated) this.progressBar.classList.remove('visible');
             this.state.isProgressBarActivated = false;
-        } else if (Math.abs(deltaY) > swipeThresholdVertical) {
+        } else if (Math.abs(deltaY) > swipeThresholdVertical && Math.abs(deltaY) > Math.abs(deltaX)) {
             if (deltaY < 0) {
                 this.handleReaction('like');
                 this.showFloatingReaction('like', this.state.endX, this.state.startY);
-            } else {
+            } else if (deltaY > 0) {
                 this.handleReaction('dislike');
                 this.showFloatingReaction('dislike', this.state.endX, this.state.startY);
             }
@@ -770,10 +770,15 @@ class VideoManager {
         const channel = this.state.channels[userId];
         if (channel?.link) {
             console.log('Переход на канал:', channel.link);
-            if (this.tg?.version && parseFloat(this.tg.version) >= 6.0) {
-                this.tg.openTelegramLink(channel.link);
-            } else {
-                window.open(channel.link, '_blank');
+            try {
+                if (this.tg && this.tg.openTelegramLink) {
+                    this.tg.openTelegramLink(channel.link);
+                } else {
+                    window.open(channel.link, '_blank');
+                }
+            } catch (error) {
+                console.error('Ошибка перехода на канал:', error);
+                this.showNotification('Не удалось открыть канал!');
             }
         } else {
             this.showNotification('Канал не зарегистрирован');
@@ -789,9 +794,12 @@ class VideoManager {
         if (!descriptionEl) {
             descriptionEl = document.createElement('div');
             descriptionEl.id = 'videoDescriptionDisplay';
+            descriptionEl.style.cssText = 'margin-top: 10px; color: var(--text-color);';
             document.querySelector('.video-wrapper')?.insertAdjacentElement('afterend', descriptionEl);
         }
-        descriptionEl.textContent = this.state.playlist[this.state.currentIndex].data.description || 'Описание отсутствует';
+        const description = this.state.playlist[this.state.currentIndex].data.description || 'Описание отсутствует';
+        descriptionEl.textContent = description;
+        descriptionEl.style.display = description !== 'Описание отсутствует' ? 'block' : 'none';
     }
 
     updateChat() {
@@ -845,7 +853,7 @@ class VideoManager {
         const videoUrl = this.state.playlist[this.state.currentIndex].url;
         const description = this.state.playlist[this.state.currentIndex].data.description || 'Смотри это крутое видео!';
         const text = `${description}\n${videoUrl}`;
-        if (this.tg?.version && parseFloat(this.tg.version) >= 6.2) {
+        if (this.tg?.openTelegramLink) {
             this.tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(videoUrl)}&text=${encodeURIComponent(description)}`);
         } else {
             navigator.clipboard.writeText(text)
@@ -950,10 +958,19 @@ class VideoManager {
             this.showNotification('Видео успешно опубликовано!');
             this.uploadModal.classList.remove('visible');
             this.state.uploadedFile = null;
+            if (this.uploadPreview.src) {
+                URL.revokeObjectURL(this.uploadPreview.src);
+                this.uploadPreview.src = '';
+                this.uploadPreview.style.display = 'none';
+            }
 
-            this.state.playlist.unshift({ url, data: this.createEmptyVideoData(this.state.userId) });
+            // Создаём данные для нового видео с описанием
+            const newVideoData = this.createEmptyVideoData(this.state.userId);
+            newVideoData.description = description;
+            this.state.playlist.unshift({ url, data: newVideoData });
             this.state.currentIndex = 0;
             this.loadVideo();
+            this.addVideoToManagementList(url, description);
         } catch (error) {
             console.error('Ошибка публикации видео:', error);
             this.showNotification(`Ошибка: ${error.message}`);
@@ -961,9 +978,14 @@ class VideoManager {
     }
 
     cancelUpload() {
+        if (this.state.uploadedFileUrl) {
+            URL.revokeObjectURL(this.state.uploadedFileUrl);
+        }
         this.state.uploadedFileUrl = null;
         this.state.uploadedFile = null;
         this.uploadModal.classList.remove('visible');
+        this.uploadPreview.src = '';
+        this.uploadPreview.style.display = 'none';
     }
 
     addVideoToManagementList(url, description) {
@@ -1001,7 +1023,8 @@ class VideoManager {
         if (newDescription !== null) {
             this.state.playlist[index].data.description = newDescription;
             this.updateVideoCache(index);
-            document.querySelector(`.video-item [data-url="${url}"]`).parentElement.querySelector('span').textContent = newDescription || 'Без описания';
+            const videoItem = document.querySelector(`.video-item [data-url="${url}"]`).parentElement;
+            videoItem.querySelector('span').textContent = newDescription || 'Без описания';
             this.showNotification('Описание обновлено!');
             if (this.state.currentIndex === index) this.updateDescription();
         }
@@ -1022,6 +1045,8 @@ class VideoManager {
             const index = this.state.playlist.findIndex(v => v.url === url);
             if (index !== -1) {
                 this.state.playlist.splice(index, 1);
+                const videoItem = document.querySelector(`.video-item [data-url="${url}"]`);
+                if (videoItem) videoItem.parentElement.remove();
                 if (this.state.currentIndex === index) {
                     this.state.currentIndex = Math.min(this.state.currentIndex, this.state.playlist.length - 1);
                     this.loadVideo();
@@ -1246,7 +1271,7 @@ class VideoManager {
         let inThrottle;
         return function (...args) {
             if (!inThrottle) {
-                func.func.apply(this, args);
+                func.apply(this, args);
                 inThrottle = true;
                 setTimeout(() => inThrottle = false, limit);
             }
@@ -1309,6 +1334,7 @@ class VideoManager {
     }
 
     showReaction(type) {
+        if (!this.reactionAnimation) return;
         this.reactionAnimation.innerHTML = type === 'like' ? '<i class="fas fa-thumbs-up"></i>' : '<i class="fas fa-thumbs-down"></i>';
         this.reactionAnimation.classList.add('show');
         setTimeout(() => this.reactionAnimation.classList.remove('show'), 2000);
@@ -1360,7 +1386,7 @@ class VideoManager {
         this.uploadBtn.style.setProperty('--progress', '0%');
 
         try {
-            const response = await fetch(`https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/proxy-video?url=${encodeURIComponent(videoUrl)}`, { mode: 'cors' });
+            const response = await fetch(`https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/download-video?url=${encodeURIComponent(videoUrl)}`, { mode: 'cors' });
             console.log('Статус ответа:', response.status, response.statusText);
             if (!response.ok) throw new Error(`Ошибка загрузки: ${response.status} ${response.statusText}`);
 
@@ -1445,23 +1471,17 @@ class VideoManager {
         e.stopPropagation();
         e.preventDefault();
 
-        if (this.tg && this.tg.version) {
-            const version = parseFloat(this.tg.version);
-            if (version >= 6.1) {
-                this.tg.requestFullscreen()
-                    .then(() => {
-                        document.body.classList.add('telegram-fullscreen');
-                        this.showNotification('Полноэкранный режим включён');
-                    })
-                    .catch((err) => {
-                        console.error('Ошибка полноэкранного режима Telegram:', err);
-                        this.tg.expand();
-                        this.showNotification('Полноэкранный режим недоступен, использовано расширение');
-                    });
-            } else {
-                this.tg.expand();
-                this.showNotification('Полноэкранный режим недоступен в этой версии Telegram');
-            }
+        if (this.tg && this.tg.requestFullscreen) {
+            this.tg.requestFullscreen()
+                .then(() => {
+                    document.body.classList.add('telegram-fullscreen');
+                    this.showNotification('Полноэкранный режим включён');
+                })
+                .catch((err) => {
+                    console.error('Ошибка полноэкранного режима Telegram:', err);
+                    this.tg.expand();
+                    this.showNotification('Полноэкранный режим недоступен, использовано расширение');
+                });
         } else if (!this.tg) {
             if (!document.fullscreenElement) {
                 document.documentElement.requestFullscreen()
