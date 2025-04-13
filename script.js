@@ -471,7 +471,7 @@ class VideoManager {
         this.state.isSwiping = false;
         this.state.touchTimeout = setTimeout(() => {
             if (!this.state.isSwiping) this.toggleVideoPlayback();
-        }, 500); // Увеличено до 500 мс для предотвращения случайных пауз
+        }, 230); // Увеличено до 500 мс для предотвращения случайных пауз
     }
 
     handleTouchMove(e) {
