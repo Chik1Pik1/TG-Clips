@@ -1,7 +1,20 @@
 document.addEventListener('DOMContentLoaded', async () => {
-    // Настройка axios-retry
+    // Проверка загрузки библиотек
+    console.log('Проверка загрузки библиотек');
+    if (typeof axios === 'undefined') {
+        console.error('axios не загружен');
+    } else {
+        console.log('axios загружен, версия:', axios.VERSION);
+    }
+    if (typeof axiosRetry === 'undefined') {
+        console.error('axios-retry не загружен');
+    } else {
+        console.log('axios-retry загружен');
+    }
+
     if (typeof axios !== 'undefined' && typeof axiosRetry !== 'undefined') {
         axiosRetry(axios, { retries: 3, retryDelay: axiosRetry.exponentialDelay });
+        console.log('axios-retry настроен с 3 попытками');
     } else {
         console.warn('axios или axios-retry не загружены, запросы могут быть менее надёжными');
     }
@@ -500,7 +513,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         setupSwipeAndMouseEvents() {
-            if (this.themeToggle) {
+            if (this.swipeArea) {
                 this.swipeArea.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
                 this.swipeArea.addEventListener('touchmove', this.throttle((e) => this.handleTouchMove(e), 16), { passive: false });
                 this.swipeArea.addEventListener('touchend', (e) => this.handleTouchEnd(e));
@@ -975,16 +988,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         async publishVideo() {
+            console.log('publishVideo: Начало выполнения');
+            if (typeof axios === 'undefined') {
+                console.error('publishVideo: axios не загружен, модерация невозможна');
+                this.showNotification('Ошибка: axios не загружен');
+                return;
+            }
             if (!this.state.uploadedFile) {
-                console.error('Файл для загрузки отсутствует');
+                console.error('publishVideo: Файл для загрузки отсутствует');
                 this.showNotification('Выберите видео для загрузки!');
                 return;
             }
 
             const file = this.state.uploadedFile;
             const description = document.getElementById('videoDescription')?.value || '';
-            console.log('Загрузка файла:', file.name, file.type, file.size);
-            console.log('telegram_id:', this.state.userId, 'Описание:', description);
+            console.log('publishVideo: Данные для загрузки:', {
+                fileName: file.name,
+                fileType: file.type,
+                fileSize: file.size,
+                telegramId: this.state.userId,
+                description
+            });
 
             const formData = new FormData();
             formData.append('file', file);
@@ -992,14 +1016,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             formData.append('description', description);
 
             try {
+                console.log('publishVideo: Отправка запроса на /api/upload-video');
                 const response = await axios.post('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/upload-video', formData, {
                     headers: { 'Content-Type': 'multipart/form-data' }
                 });
-                console.log('Ответ /api/upload-video:', response.status, response.data);
+                console.log('publishVideo: Ответ сервера:', response.status, response.data);
                 const { url } = response.data;
 
-                // Логирование модерации происходит на сервере в index.js
-                // Здесь мы только обрабатываем успешный ответ
                 this.showNotification('Видео успешно опубликовано!');
                 this.uploadModal.classList.remove('visible');
                 this.state.uploadedFile = null;
@@ -1016,7 +1039,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.loadVideo();
                 this.addVideoToManagementList(url, description);
             } catch (error) {
-                console.error('Ошибка публикации видео:', error);
+                console.error('publishVideo: Ошибка публикации:', error.message, error.response?.data);
                 this.showNotification(`Ошибка: ${error.response?.data?.error || error.message}`);
             }
         }
