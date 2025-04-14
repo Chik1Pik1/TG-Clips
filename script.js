@@ -500,7 +500,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         setupSwipeAndMouseEvents() {
-            if (this.swipe themeToggle) {
+            if (this.themeToggle) {
                 this.swipeArea.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
                 this.swipeArea.addEventListener('touchmove', this.throttle((e) => this.handleTouchMove(e), 16), { passive: false });
                 this.swipeArea.addEventListener('touchend', (e) => this.handleTouchEnd(e));
