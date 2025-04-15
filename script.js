@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', async () => {
-    // Базовый URL бэкенда (можно настроить через переменную окружения)
-    const BASE_URL = process.env.BACKEND_URL || 'https://youthful-asp-tgcl1ps-e1547e2a.koyeb.app';
+    // Базовый URL бэкенда
+    const BASE_URL = 'https://youthful-asp-tgcl1ps-e1547e2a.koyeb.app';
 
     // Проверка загрузки библиотек
     console.log('Проверка загрузки библиотек');
@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         async init() {
-            console.log('Скрипт обновлён, версия 11');
+            console.log('Скрипт обновлён, версия 12');
             if (this.tg?.initDataUnsafe?.user) {
                 this.state.userId = String(this.tg.initDataUnsafe.user.id);
                 console.log('Telegram инициализирован, userId:', this.state.userId);
@@ -147,7 +147,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             bindButton(this.authBtn, () => this.handleAuth(), '#authBtn');
             bindButton(this.registerChannelBtn, () => this.registerChannel(), '#registerChannelBtn');
 
-            this.reactionButtons.forEach(btn => btn.addEventListener('click', (e) => this.handleReaction(btn.dataset.type, e)));
+            this.reactionButtons.forEach(btn => {
+                if (btn) {
+                    btn.addEventListener('click', (e) => this.handleReaction(btn.dataset.type, e));
+                }
+            });
             bindButton(this.plusBtn, (e) => this.toggleSubmenu(e), '.plus-btn');
             bindButton(this.uploadBtn, (e) => this.downloadCurrentVideo(e), '.upload-btn');
             bindButton(this.toggleReactionBar, (e) => this.toggleReactionBarVisibility(e), '.toggle-reaction-bar');
@@ -350,10 +354,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         initializePlayer() {
-            if (this.userAvatar && this.tg?.initDataUnsafe?.user?.photo_url) {
-                this.userAvatar.src = this.tg.initDataUnsafe.user.photo_url;
-            } else {
-                this.userAvatar.src = '/images/default-avatar.png';
+            if (this.userAvatar) {
+                this.userAvatar.src = this.tg?.initDataUnsafe?.user?.photo_url || '/images/default-avatar.png';
             }
             this.initializeTheme();
             this.initializeTooltips();
@@ -864,7 +866,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 descriptionEl = document.createElement('div');
                 descriptionEl.id = 'videoDescriptionDisplay';
                 descriptionEl.style.cssText = 'margin-top: 10px; color: var(--text-color);';
-                document.querySelector('.video-wrapper')?.insertAdjacentElement('afterend', descriptionEl);
+                const videoWrapper = document.querySelector('.video-wrapper');
+                if (videoWrapper) {
+                    videoWrapper.insertAdjacentElement('afterend', descriptionEl);
+                }
             }
             const description = this.state.playlist[this.state.currentIndex].data.description || 'Описание отсутствует';
             descriptionEl.textContent = description;
@@ -1132,7 +1137,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         showVideoManagementList() {
             const list = document.getElementById('videoManagementList');
-            list.classList.toggle('visible');
+            if (list) {
+                list.classList.toggle('visible');
+            }
         }
 
         hideManagementListOnClickOutside(e) {
@@ -1278,21 +1285,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             const savedTheme = localStorage.getItem('theme') || 'dark';
             if (savedTheme === 'dark') {
                 document.body.classList.add('dark');
-                this.themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+                if (this.themeToggle) this.themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
             } else {
                 document.body.classList.remove('dark');
-                this.themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
+                if (this.themeToggle) this.themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
             }
         }
 
         toggleTheme() {
             if (document.body.classList.contains('dark')) {
                 document.body.classList.remove('dark');
-                this.themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
+                if (this.themeToggle) this.themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
                 localStorage.setItem('theme', 'light');
             } else {
                 document.body.classList.add('dark');
-                this.themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+                if (this.themeToggle) this.themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
                 localStorage.setItem('theme', 'dark');
             }
         }
@@ -1408,8 +1415,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         toggleSubmenu(e) {
             e.stopPropagation();
             this.state.isSubmenuOpen = !this.state.isSubmenuOpen;
-            this.submenuUpload.classList.toggle('active', this.state.isSubmenuOpen);
-            this.submenuChat.classList.toggle('active', this.state.isSubmenuOpen);
+            if (this.submenuUpload) this.submenuUpload.classList.toggle('active', this.state.isSubmenuOpen);
+            if (this.submenuChat) this.submenuChat.classList.toggle('active', this.state.isSubmenuOpen);
         }
 
         toggleReactionBarVisibility(e) {
@@ -1574,8 +1581,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    const videoManager = new VideoManager();
     try {
+        const videoManager = new VideoManager();
         await videoManager.init();
         console.log('VideoManager успешно инициализирован');
     } catch (error) {
