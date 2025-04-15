@@ -1,4 +1,7 @@
 document.addEventListener('DOMContentLoaded', async () => {
+    // Базовый URL бэкенда (можно настроить через переменную окружения)
+    const BASE_URL = process.env.BACKEND_URL || 'https://youthful-asp-tgcl1ps-e1547e2a.koyeb.app';
+
     // Проверка загрузки библиотек
     console.log('Проверка загрузки библиотек');
     if (typeof axios === 'undefined') {
@@ -10,13 +13,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error('axios-retry не загружен');
     } else {
         console.log('axios-retry загружен');
-    }
-
-    if (typeof axios !== 'undefined' && typeof axiosRetry !== 'undefined') {
         axiosRetry(axios, { retries: 3, retryDelay: axiosRetry.exponentialDelay });
         console.log('axios-retry настроен с 3 попытками');
-    } else {
-        console.warn('axios или axios-retry не загружены, запросы могут быть менее надёжными');
     }
 
     class VideoManager {
@@ -58,7 +56,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         async init() {
-            console.log('Скрипт обновлён, версия 10');
+            console.log('Скрипт обновлён, версия 11');
             if (this.tg?.initDataUnsafe?.user) {
                 this.state.userId = String(this.tg.initDataUnsafe.user.id);
                 console.log('Telegram инициализирован, userId:', this.state.userId);
@@ -70,8 +68,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             this.bindElements();
             this.bindEvents();
+            await this.checkBackendStatus();
             await this.loadInitialVideos();
             this.showPlayer();
+        }
+
+        async checkBackendStatus() {
+            try {
+                const response = await axios.get(`${BASE_URL}/`, { timeout: 5000 });
+                console.log('Статус бэкенда:', response.status, response.data);
+            } catch (error) {
+                console.error('Ошибка проверки статуса бэкенда:', error.message);
+                this.showNotification('Сервер недоступен, используются локальные данные');
+            }
         }
 
         bindElements() {
@@ -180,7 +189,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.addEventListener('click', (e) => this.hideManagementListOnClickOutside(e));
             this.bindUserAvatar();
 
-            // Привязываем события для adjustElementsForTelegram
             window.addEventListener('resize', () => this.adjustElementsForTelegram());
             this.classObserver = new MutationObserver(() => this.adjustElementsForTelegram());
             this.classObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
@@ -322,7 +330,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.log('Введённая ссылка:', channelLink);
             if (channelLink && channelLink.match(/^https:\/\/t\.me\/[a-zA-Z0-9_]+$/)) {
                 try {
-                    const response = await axios.post('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/register-channel', {
+                    const response = await axios.post(`${BASE_URL}/api/register-channel`, {
                         telegram_id: this.state.userId,
                         channel_link: channelLink
                     });
@@ -360,7 +368,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             try {
                 console.log('Попытка загрузить видео с сервера...');
-                const response = await axios.get('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/public-videos');
+                const response = await axios.get(`${BASE_URL}/api/public-videos`, { timeout: 10000 });
                 console.log('Ответ /api/public-videos:', response.status, response.data);
                 const data = response.data;
 
@@ -389,7 +397,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }));
                 }
             } catch (error) {
-                console.error('Ошибка загрузки видео с сервера:', error);
+                console.error('Ошибка загрузки видео с сервера:', error.message);
                 this.showNotification(`Не удалось загрузить видео с сервера: ${error.message}`);
                 this.state.playlist = stockVideos;
             }
@@ -990,7 +998,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         async publishVideo() {
             console.log('publishVideo: Начало выполнения');
             if (typeof axios === 'undefined') {
-                console.error('publishVideo: axios не загружен, модерация невозможна');
+                console.error('publishVideo: axios не загружен, публикация невозможна');
                 this.showNotification('Ошибка: axios не загружен');
                 return;
             }
@@ -1017,11 +1025,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             try {
                 console.log('publishVideo: Отправка запроса на /api/upload-video');
-                const response = await axios.post('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/upload-video', formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
+                const response = await axios.post(`${BASE_URL}/api/upload-video`, formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                    timeout: 30000
                 });
                 console.log('publishVideo: Ответ сервера:', response.status, response.data);
-                const { url } = response.data;
+                const { url } = response.data.data[0];
 
                 this.showNotification('Видео успешно опубликовано!');
                 this.uploadModal.classList.remove('visible');
@@ -1099,10 +1108,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         async deleteVideo(url) {
             try {
-                const response = await axios.post('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/delete-video', {
+                const response = await axios.post(`${BASE_URL}/api/delete-video`, {
                     url,
                     telegram_id: this.state.userId
-                });
+                }, { timeout: 10000 });
                 console.log('Ответ /api/delete-video:', response.status, response.data);
                 this.showNotification('Видео успешно удалено!');
                 const index = this.state.playlist.findIndex(v => v.url === url);
@@ -1256,11 +1265,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             localStorage.setItem(`videoData_${url}`, JSON.stringify(cacheData));
 
             try {
-                const response = await axios.post('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/update-video', cacheData);
+                const response = await axios.post(`${BASE_URL}/api/update-video`, cacheData, { timeout: 10000 });
                 console.log('Ответ /api/update-video:', response.status, response.data);
                 console.log('Данные сохранены на сервере');
             } catch (error) {
-                console.error('Ошибка обновления данных:', error);
+                console.error('Ошибка обновления данных:', error.message);
                 this.showNotification('Не удалось сохранить данные!');
             }
         }
@@ -1442,7 +1451,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.uploadBtn.style.setProperty('--progress', '0%');
 
             try {
-                const response = await fetch(`https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/download-video?url=${encodeURIComponent(videoUrl)}`, { mode: 'cors' });
+                const response = await fetch(`${BASE_URL}/api/download-video?url=${encodeURIComponent(videoUrl)}`, { mode: 'cors' });
                 console.log('Статус ответа:', response.status, response.statusText);
                 if (!response.ok) throw new Error(`Ошибка загрузки: ${response.status} ${response.statusText}`);
 
