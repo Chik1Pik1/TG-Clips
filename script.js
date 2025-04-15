@@ -6,6 +6,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('Проверка загрузки библиотек');
     if (typeof axios === 'undefined') {
         console.error('axios не загружен');
+        document.body.innerHTML += '<div style="color: red; text-align: center;">Ошибка загрузки библиотек</div>';
+        return;
     } else {
         console.log('axios загружен, версия:', axios.VERSION);
     }
@@ -13,7 +15,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.warn('axios-retry не загружен, запросы могут быть менее устойчивыми');
     } else {
         console.log('axios-retry загружен');
-        axiosRetry(axios, { retries: 3, retryDelay: axiosRetry.exponentialDelay });
+        axiosRetry(axios, {
+            retries: 3,
+            retryDelay: (retryCount) => retryCount * 1000, // 1с, 2с, 3с
+            retryCondition: (error) => {
+                return axiosRetry.isNetworkOrIdempotentRequestError(error) || (error.response && error.response.status >= 500);
+            }
+        });
         console.log('axios-retry настроен с 3 попытками');
     }
 
@@ -44,20 +52,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.tg = window.Telegram?.WebApp;
             this.MAX_PRELOAD_SIZE = 3;
             this.MAX_PLAYLIST_SIZE = 10;
-            this.backendErrorCount = 0; // Счетчик ошибок бэкенда
+            this.backendErrorCount = 0;
 
             if (this.tg) {
                 this.tg.ready();
                 this.tg.expand();
-                console.log('Telegram Web App инициализирован:', this.tg.initDataUnsafe);
-                console.log('Версия Telegram Web App:', this.tg.version);
+                console.log('Telegram Web App инициализирован:', {
+                    platform: this.tg.platform,
+                    initData: this.tg.initDataUnsafe,
+                    version: this.tg.version
+                });
             } else {
                 console.warn('Telegram Web App SDK не загружен. Работа в режиме браузера.');
             }
         }
 
         async init() {
-            console.log('Скрипт обновлён, версия 15');
+            console.log('Скрипт обновлён, версия 16');
+            // Очистка устаревшего локального хранилища
+            localStorage.removeItem('videoData');
+            localStorage.removeItem('pendingUpdates');
+
             if (this.tg?.initDataUnsafe?.user) {
                 this.state.userId = String(this.tg.initDataUnsafe.user.id);
                 console.log('Telegram инициализирован, userId:', this.state.userId);
@@ -79,10 +94,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const response = await axios.get(`${BASE_URL}/`, { timeout: 5000 });
                 console.log('Статус бэкенда:', response.status, response.data);
                 this.backendErrorCount = 0;
+                return true;
             } catch (error) {
-                console.error('Ошибка проверки статуса бэкенда:', error.message);
+                console.error('Ошибка проверки статуса бэкенда:', error.message, error.code);
                 this.showNotification('Сервер недоступен, используются локальные данные', true);
                 this.backendErrorCount++;
+                return false;
             }
         }
 
@@ -164,6 +181,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.video.addEventListener('pause', () => this.handlePause());
                 this.video.addEventListener('ended', () => this.handleEnded());
                 this.video.addEventListener('timeupdate', () => this.handleTimeUpdate());
+                this.video.addEventListener('error', () => this.handleVideoError());
             }
             bindButton(this.progressRange, (e) => this.handleProgressInput(e), '#progressRange');
             this.setupSwipeAndMouseEvents();
@@ -343,7 +361,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const response = await axios.post(`${BASE_URL}/api/register-channel`, {
                         telegram_id: this.state.userId,
                         channel_link: channelLink
-                    });
+                    }, { timeout: 10000 });
                     console.log('Ответ /api/register-channel:', response.status, response.data);
                     this.state.channels[this.state.userId] = { videos: [], link: channelLink };
                     localStorage.setItem('channels', JSON.stringify(this.state.channels));
@@ -351,7 +369,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     this.showNotification('Канал успешно зарегистрирован!');
                     this.showPlayer();
                 } catch (error) {
-                    console.error('Ошибка регистрации канала:', error);
+                    console.error('Ошибка регистрации канала:', error.message, error.response?.data);
                     this.showNotification(`Ошибка при регистрации канала: ${error.message}`, true);
                     this.backendErrorCount++;
                 }
@@ -377,7 +395,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             try {
                 console.log('Попытка загрузить видео с сервера...');
-                const response = await axios.get(`${BASE_URL}/api/public-videos`, { timeout: 10000 });
+                const response = await axios.get(`${BASE_URL}/api/public-videos`, {
+                    timeout: 15000,
+                    headers: { 'Accept': 'application/json' }
+                });
                 console.log('Ответ /api/public-videos:', response.status, response.data);
                 const data = response.data;
 
@@ -407,7 +428,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 this.backendErrorCount = 0;
             } catch (error) {
-                console.error('Ошибка загрузки видео с сервера:', error.message, error.response?.data);
+                console.error('Ошибка загрузки видео:', error.message, {
+                    code: error.code,
+                    response: error.response?.data,
+                    platform: this.tg?.platform
+                });
                 this.showNotification('Не удалось загрузить видео с сервера, используются стоковые видео', true);
                 this.state.playlist = stockVideos;
                 this.backendErrorCount++;
@@ -457,6 +482,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.updateVideoCache(this.state.currentIndex);
                 this.updateRating();
             }
+        }
+
+        handleVideoError() {
+            console.error('Ошибка воспроизведения видео:', this.state.playlist[this.state.currentIndex]?.url);
+            this.showNotification('Ошибка загрузки видео, переключаемся на следующее');
+            this.playNextVideo();
         }
 
         handlePlay() {
@@ -706,14 +737,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.video.classList.add(fadeOutClass);
             this.video.pause();
             setTimeout(() => {
-                this.videoSource.src = this.state.playlist[this.state.currentIndex].url;
+                const videoUrl = this.state.playlist[this.state.currentIndex].url;
+                console.log('Загрузка видео:', videoUrl);
+                this.videoSource.src = videoUrl;
                 this.video.load();
                 const timeout = setTimeout(() => {
                     if (!this.video.readyState) {
+                        console.error('Видео не загрузилось:', videoUrl);
                         this.showNotification('Ошибка загрузки видео!');
                         this.playNextVideo();
                     }
-                }, 5000);
+                }, 7000);
                 this.video.addEventListener('canplay', () => {
                     clearTimeout(timeout);
                     const lastPosition = this.state.playlist[this.state.currentIndex].data.lastPosition;
@@ -722,7 +756,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (lastPosition > 0 && lastPosition < this.video.duration) {
                         this.showResumePrompt(lastPosition);
                     } else {
-                        this.video.play().catch(err => console.log("Ошибка воспроизведения:", err));
+                        this.video.play().catch(err => {
+                            console.error('Ошибка воспроизведения:', err);
+                            this.showNotification('Ошибка воспроизведения видео');
+                        });
                     }
                 }, { once: true });
                 this.updateCounters();
@@ -1282,15 +1319,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                 description: videoData.description
             };
             console.log('Отправляемые данные для обновления:', cacheData);
-            localStorage.setItem(`videoData_${url}`, JSON.stringify(cacheData));
 
             try {
-                const response = await axios.post(`${BASE_URL}/api/update-video`, cacheData, { timeout: 10000 });
+                const response = await axios.post(`${BASE_URL}/api/update-video`, cacheData, { timeout: 15000 });
                 console.log('Ответ /api/update-video:', response.status, response.data);
                 console.log('Данные сохранены на сервере');
+                localStorage.removeItem(`videoData_${url}`); // Очищаем локальные данные после успешного сохранения
                 this.backendErrorCount = 0;
             } catch (error) {
-                console.error('Ошибка обновления данных:', error.message, error.response?.data);
+                console.error('Ошибка обновления данных:', error.message, {
+                    code: error.code,
+                    response: error.response?.data,
+                    platform: this.tg?.platform
+                });
+                localStorage.setItem(`videoData_${url}`, JSON.stringify(cacheData));
                 this.backendErrorCount++;
                 if (this.backendErrorCount <= 3) {
                     this.showNotification('Не удалось сохранить данные, данные сохранены локально', true);
@@ -1335,7 +1377,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         showNotification(message, isError = false) {
             if (isError && this.backendErrorCount > 3) {
-                return; // Ограничиваем повторные уведомления об ошибках
+                return;
             }
             const notification = document.createElement('div');
             notification.style.cssText = `
@@ -1479,7 +1521,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.uploadBtn.style.setProperty('--progress', '0%');
 
             try {
-                const response = await fetch(`${BASE_URL}/api/download-video?url=${encodeURIComponent(videoUrl)}`, { mode: 'cors' });
+                const response = await fetch(videoUrl, { mode: 'cors' });
                 console.log('Статус ответа:', response.status, response.statusText);
                 if (!response.ok) throw new Error(`Ошибка загрузки: ${response.status} ${response.statusText}`);
 
