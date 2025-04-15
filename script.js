@@ -13,6 +13,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (typeof axiosRetry === 'undefined') {
         console.warn('axios-retry не загружен, запросы могут быть менее устойчивыми');
+        // Динамическая загрузка axios-retry
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/axios-retry@3/dist/axios-retry.min.js';
+        script.onload = () => {
+            console.log('axios-retry загружен динамически');
+            axiosRetry(axios, {
+                retries: 10,
+                retryDelay: (retryCount) => Math.min(retryCount * 3000, 15000),
+                retryCondition: (error) => {
+                    return axiosRetry.isNetworkOrIdempotentRequestError(error) || (error.response && error.response.status >= 500);
+                }
+            });
+        };
+        script.onerror = () => console.error('Ошибка загрузки axios-retry');
+        document.head.appendChild(script);
     } else {
         console.log('axios-retry загружен');
         axiosRetry(axios, {
@@ -101,11 +116,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 console.log('Проверка доступности сервера:', BASE_URL);
                 const response = await axios.get(`${BASE_URL}/`, {
-                    timeout: 15000,
+                    timeout: 30000,
                     headers: {
                         'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Origin': 'https://web.telegram.org'
+                        'X-Requested-With': 'XMLHttpRequest'
                     }
                 });
                 console.log('Статус бэкенда:', response.status, response.data);
@@ -119,7 +133,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     response: error.response?.data,
                     status: error.response?.status
                 });
-                this.showNotification('Сервер недоступен, используются локальные данные', true);
+                this.showNotification(`Сервер недоступен: ${error.message}`, true);
                 this.backendErrorCount++;
                 this.isServerOnline = false;
                 return false;
@@ -131,43 +145,28 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (await this.checkBackendStatus() && this.state.pendingUpdates.length > 0) {
                     await this.syncPendingUpdates();
                 }
-            }, 30000);
+            }, 60000);
         }
 
         async syncPendingUpdates() {
-            if (!this.state.pendingUpdates.length || !this.isServerOnline || !navigator.onLine) {
-                console.log('Синхронизация невозможна:', {
-                    pendingUpdates: this.state.pendingUpdates.length,
-                    isServerOnline: this.isServerOnline,
-                    isOnline: navigator.onLine
-                });
-                return;
-            }
-
-            console.log('Начало синхронизации:', this.state.pendingUpdates.length, 'элементов');
+            if (!this.isServerOnline) return;
             const updates = [...this.state.pendingUpdates];
-            this.state.pendingUpdates = [];
-
-            for (const update of updates) {
+            for (const cacheData of updates) {
                 try {
-                    console.log('Отправка обновления:', update.url);
-                    const response = await axios.post(`${BASE_URL}/api/update-video`, update, {
-                        timeout: 15000,
-                        headers: { 'Origin': 'https://web.telegram.org' }
+                    const response = await axios.post(`${BASE_URL}/api/update-video`, cacheData, {
+                        timeout: 30000,
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
                     });
-                    console.log('Успешно синхронизировано:', response.data);
+                    console.log('Синхронизировано:', cacheData.url, response.status);
+                    this.state.pendingUpdates = this.state.pendingUpdates.filter(u => u.url !== cacheData.url);
+                    localStorage.setItem('pendingUpdates', JSON.stringify(this.state.pendingUpdates));
+                    localStorage.removeItem(`videoData_${cacheData.url}`);
                 } catch (error) {
-                    console.error('Ошибка синхронизации:', error.message, update);
-                    this.state.pendingUpdates.push(update);
+                    console.error('Ошибка синхронизации:', cacheData.url, error.message);
                 }
-            }
-
-            localStorage.setItem('pendingUpdates', JSON.stringify(this.state.pendingUpdates));
-            if (!this.state.pendingUpdates.length) {
-                console.log('Все данные синхронизированы');
-                this.showNotification('Данные синхронизированы с сервером');
-            } else {
-                console.warn('Остались несинхронизированные данные:', this.state.pendingUpdates.length);
             }
         }
 
@@ -429,13 +428,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const response = await axios.post(`${BASE_URL}/api/register-channel`, {
                         telegram_id: this.state.userId,
                         channel_link: channelLink
-                    }, { timeout: 10000 });
+                    }, {
+                        timeout: 30000,
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    });
                     console.log('Ответ /api/register-channel:', response.status, response.data);
                     this.state.channels[this.state.userId] = { videos: [], link: channelLink };
                     localStorage.setItem('channels', JSON.stringify(this.state.channels));
                     console.log('Каналы после регистрации:', this.state.channels);
                     this.showNotification('Канал успешно зарегистрирован!');
                     this.showPlayer();
+                    this.isServerOnline = true;
                 } catch (error) {
                     console.error('Ошибка регистрации канала:', error.message, error.response?.data);
                     this.showNotification(`Ошибка при регистрации канала: ${error.message}`, true);
@@ -464,13 +470,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 console.log('Попытка загрузить видео с сервера...');
                 const response = await axios.get(`${BASE_URL}/api/public-videos`, {
-                    timeout: 15000,
+                    timeout: 30000,
                     headers: {
                         'Accept': 'application/json',
-                        'Origin': 'https://web.telegram.org'
+                        'X-Requested-With': 'XMLHttpRequest'
                     }
                 });
                 console.log('Ответ /api/public-videos:', response.status, response.data);
+                this.isServerOnline = true;
                 const data = response.data;
 
                 if (!data || !Array.isArray(data) || data.length === 0) {
@@ -1148,10 +1155,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 console.log('publishVideo: Отправка запроса на /api/upload-video');
                 const response = await axios.post(`${BASE_URL}/api/upload-video`, formData, {
-                    headers: {
-                        'Content-Type': 'multipart/form-data',
-                        'Origin': 'https://web.telegram.org'
-                    },
+                    headers: { 'Content-Type': 'multipart/form-data' },
                     timeout: 30000
                 });
                 console.log('publishVideo: Ответ сервера:', response.status, response.data);
@@ -1173,6 +1177,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.loadVideo();
                 this.addVideoToManagementList(url, description);
                 this.backendErrorCount = 0;
+                this.isServerOnline = true;
             } catch (error) {
                 console.error('publishVideo: Ошибка публикации:', error.message, error.response?.data);
                 this.showNotification(`Ошибка загрузки видео: ${error.response?.data?.error || error.message}`, true);
@@ -1239,8 +1244,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     url,
                     telegram_id: this.state.userId
                 }, {
-                    timeout: 10000,
-                    headers: { 'Origin': 'https://web.telegram.org' }
+                    timeout: 30000,
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
                 });
                 console.log('Ответ /api/delete-video:', response.status, response.data);
                 this.showNotification('Видео успешно удалено!');
@@ -1255,6 +1263,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
                 this.backendErrorCount = 0;
+                this.isServerOnline = true;
             } catch (error) {
                 console.error('Ошибка удаления видео:', error);
                 this.showNotification(`Ошибка: ${error.response?.data?.error || error.message}`, true);
@@ -1398,23 +1407,31 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.log('Отправляемые данные для обновления:', cacheData);
 
             if (!this.isServerOnline || !navigator.onLine) {
-                console.log('Сервер недоступен или нет интернета, сохраняем локально');
+                console.warn('Сервер недоступен или нет интернета, сохраняем локально');
                 localStorage.setItem(`videoData_${url}`, JSON.stringify(cacheData));
-                this.state.pendingUpdates.push(cacheData);
-                localStorage.setItem('pendingUpdates', JSON.stringify(this.state.pendingUpdates));
-                this.showNotification('Данные сохранены локально', true);
+                if (!this.state.pendingUpdates.some(u => u.url === url)) {
+                    this.state.pendingUpdates.push(cacheData);
+                    localStorage.setItem('pendingUpdates', JSON.stringify(this.state.pendingUpdates));
+                }
+                this.showNotification('Сервер недоступен, данные сохранены локально', true);
                 return;
             }
 
             try {
                 const response = await axios.post(`${BASE_URL}/api/update-video`, cacheData, {
-                    timeout: 15000,
-                    headers: { 'Origin': 'https://web.telegram.org' }
+                    timeout: 30000,
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
                 });
                 console.log('Ответ /api/update-video:', response.status, response.data);
                 console.log('Данные сохранены на сервере');
                 localStorage.removeItem(`videoData_${url}`);
+                this.state.pendingUpdates = this.state.pendingUpdates.filter(u => u.url !== url);
+                localStorage.setItem('pendingUpdates', JSON.stringify(this.state.pendingUpdates));
                 this.backendErrorCount = 0;
+                this.isServerOnline = true;
             } catch (error) {
                 console.error('Ошибка обновления данных:', error.message, {
                     code: error.code,
@@ -1422,12 +1439,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     platform: this.tg?.platform
                 });
                 localStorage.setItem(`videoData_${url}`, JSON.stringify(cacheData));
-                this.state.pendingUpdates.push(cacheData);
-                localStorage.setItem('pendingUpdates', JSON.stringify(this.state.pendingUpdates));
-                this.backendErrorCount++;
-                if (this.backendErrorCount <= 3) {
-                    this.showNotification('Не удалось сохранить данные, данные сохранены локально', true);
+                if (!this.state.pendingUpdates.some(u => u.url === url)) {
+                    this.state.pendingUpdates.push(cacheData);
+                    localStorage.setItem('pendingUpdates', JSON.stringify(this.state.pendingUpdates));
                 }
+                this.backendErrorCount++;
+                this.showNotification(`Не удалось сохранить на сервере: ${error.message}. Данные сохранены локально`, true);
             }
         }
 
