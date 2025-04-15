@@ -360,7 +360,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             try {
                 console.log('Попытка загрузить видео с сервера...');
-                const response = await axios.get('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/public-videos');
+                const response = await axios.get('https://youthful-asp-tgcl1ps-e1547e2a.koyeb.app/api/public-videos');
                 console.log('Ответ /api/public-videos:', response.status, response.data);
                 const data = response.data;
 
