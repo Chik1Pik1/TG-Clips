@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('axios загружен, версия:', axios.VERSION);
     }
     if (typeof axiosRetry === 'undefined') {
-        console.error('axios-retry не загружен');
+        console.warn('axios-retry не загружен, запросы могут быть менее устойчивыми');
     } else {
         console.log('axios-retry загружен');
         axiosRetry(axios, { retries: 3, retryDelay: axiosRetry.exponentialDelay });
@@ -44,6 +44,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.tg = window.Telegram?.WebApp;
             this.MAX_PRELOAD_SIZE = 3;
             this.MAX_PLAYLIST_SIZE = 10;
+            this.backendErrorCount = 0; // Счетчик ошибок бэкенда
 
             if (this.tg) {
                 this.tg.ready();
@@ -56,7 +57,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         async init() {
-            console.log('Скрипт обновлён, версия 12');
+            console.log('Скрипт обновлён, версия 15');
             if (this.tg?.initDataUnsafe?.user) {
                 this.state.userId = String(this.tg.initDataUnsafe.user.id);
                 console.log('Telegram инициализирован, userId:', this.state.userId);
@@ -77,9 +78,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const response = await axios.get(`${BASE_URL}/`, { timeout: 5000 });
                 console.log('Статус бэкенда:', response.status, response.data);
+                this.backendErrorCount = 0;
             } catch (error) {
                 console.error('Ошибка проверки статуса бэкенда:', error.message);
-                this.showNotification('Сервер недоступен, используются локальные данные');
+                this.showNotification('Сервер недоступен, используются локальные данные', true);
+                this.backendErrorCount++;
             }
         }
 
@@ -238,6 +241,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         handleAuth() {
+            console.log('handleAuth вызван');
             if (this.tg?.initDataUnsafe?.user) {
                 this.state.userId = String(this.tg.initDataUnsafe.user.id);
                 this.showNotification('Вход успешен: ' + this.state.userId);
@@ -249,6 +253,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         showPlayer() {
+            console.log('showPlayer вызван');
             if (this.authScreen && this.playerContainer) {
                 this.authScreen.style.display = 'none';
                 this.playerContainer.style.display = 'flex';
@@ -256,6 +261,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.adjustElementsForTelegram();
             } else {
                 console.error('Ошибка: authScreen или playerContainer не найдены');
+                this.showNotification('Ошибка интерфейса, обратитесь в поддержку');
             }
         }
 
@@ -346,7 +352,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     this.showPlayer();
                 } catch (error) {
                     console.error('Ошибка регистрации канала:', error);
-                    this.showNotification(`Ошибка при регистрации канала: ${error.message}`);
+                    this.showNotification(`Ошибка при регистрации канала: ${error.message}`, true);
+                    this.backendErrorCount++;
                 }
             } else {
                 this.showNotification('Введите корректную ссылку на Telegram-канал.');
@@ -355,7 +362,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         initializePlayer() {
             if (this.userAvatar) {
-                this.userAvatar.src = this.tg?.initDataUnsafe?.user?.photo_url || '/images/default-avatar.png';
+                this.userAvatar.src = this.tg?.initDataUnsafe?.user?.photo_url || 'https://placehold.co/30x30';
             }
             this.initializeTheme();
             this.initializeTooltips();
@@ -398,10 +405,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                         }
                     }));
                 }
+                this.backendErrorCount = 0;
             } catch (error) {
-                console.error('Ошибка загрузки видео с сервера:', error.message);
-                this.showNotification(`Не удалось загрузить видео с сервера: ${error.message}`);
+                console.error('Ошибка загрузки видео с сервера:', error.message, error.response?.data);
+                this.showNotification('Не удалось загрузить видео с сервера, используются стоковые видео', true);
                 this.state.playlist = stockVideos;
+                this.backendErrorCount++;
             }
 
             console.log('Итоговый плейлист:', this.state.playlist);
@@ -784,7 +793,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             videoData.comments.forEach((comment, idx) => {
                 const userPhoto = (this.tg?.initDataUnsafe?.user?.id === comment.userId && this.tg?.initDataUnsafe?.user?.photo_url)
                     ? this.tg.initDataUnsafe.user.photo_url
-                    : '/images/default-avatar.png';
+                    : 'https://placehold.co/30x30';
                 const username = (this.tg?.initDataUnsafe?.user?.id === comment.userId && this.tg?.initDataUnsafe?.user?.username)
                     ? `@${this.tg.initDataUnsafe.user.username}`
                     : `User_${comment.userId.slice(0, 5)}`;
@@ -1052,9 +1061,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.state.currentIndex = 0;
                 this.loadVideo();
                 this.addVideoToManagementList(url, description);
+                this.backendErrorCount = 0;
             } catch (error) {
                 console.error('publishVideo: Ошибка публикации:', error.message, error.response?.data);
-                this.showNotification(`Ошибка: ${error.response?.data?.error || error.message}`);
+                this.showNotification(`Ошибка загрузки видео: ${error.response?.data?.error || error.message}`, true);
+                this.backendErrorCount++;
             }
         }
 
@@ -1129,9 +1140,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                         this.loadVideo();
                     }
                 }
+                this.backendErrorCount = 0;
             } catch (error) {
                 console.error('Ошибка удаления видео:', error);
-                this.showNotification(`Ошибка: ${error.response?.data?.error || error.message}`);
+                this.showNotification(`Ошибка: ${error.response?.data?.error || error.message}`, true);
+                this.backendErrorCount++;
             }
         }
 
@@ -1275,9 +1288,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const response = await axios.post(`${BASE_URL}/api/update-video`, cacheData, { timeout: 10000 });
                 console.log('Ответ /api/update-video:', response.status, response.data);
                 console.log('Данные сохранены на сервере');
+                this.backendErrorCount = 0;
             } catch (error) {
-                console.error('Ошибка обновления данных:', error.message);
-                this.showNotification('Не удалось сохранить данные!');
+                console.error('Ошибка обновления данных:', error.message, error.response?.data);
+                this.backendErrorCount++;
+                if (this.backendErrorCount <= 3) {
+                    this.showNotification('Не удалось сохранить данные, данные сохранены локально', true);
+                }
             }
         }
 
@@ -1316,11 +1333,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        showNotification(message) {
+        showNotification(message, isError = false) {
+            if (isError && this.backendErrorCount > 3) {
+                return; // Ограничиваем повторные уведомления об ошибках
+            }
             const notification = document.createElement('div');
             notification.style.cssText = `
                 position: fixed; top: 10%; left: 50%; transform: translateX(-50%);
-                background: var(--notification-bg); color: var(--notification-text);
+                background: ${isError ? 'var(--error-bg, #ff4d4d)' : 'var(--notification-bg)'}; 
+                color: ${isError ? 'var(--error-text, #fff)' : 'var(--notification-text)'};
                 padding: 10px 20px; border-radius: 5px; z-index: 1000;
                 opacity: 0; transition: opacity 0.3s ease;
             `;
@@ -1488,9 +1509,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 document.body.removeChild(a);
 
                 this.showNotification('Видео успешно скачано!');
+                this.backendErrorCount = 0;
             } catch (err) {
                 console.error('Ошибка скачивания:', err);
-                this.showNotification(`Не удалось скачать видео: ${err.message}`);
+                this.showNotification(`Не удалось скачать видео: ${err.message}`, true);
+                this.backendErrorCount++;
             } finally {
                 this.uploadBtn.classList.remove('downloading');
                 this.uploadBtn.style.setProperty('--progress', '0%');
@@ -1587,5 +1610,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('VideoManager успешно инициализирован');
     } catch (error) {
         console.error('Ошибка инициализации VideoManager:', error);
+        document.body.innerHTML += '<div style="color: red; text-align: center;">Критическая ошибка приложения, обратитесь в поддержку</div>';
     }
 });
