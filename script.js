@@ -1,5 +1,3 @@
-const SERVER_URL = 'https://youthful-asp-tgcl1ps-e1547e2a.koyeb.app';
-
 class VideoManager {
     constructor() {
         this.state = {
@@ -39,7 +37,7 @@ class VideoManager {
     }
 
     async init() {
-        console.log('Скрипт обновлён, версия 11');
+        console.log('Скрипт обновлён, версия 10');
         if (this.tg?.initDataUnsafe?.user) {
             this.state.userId = String(this.tg.initDataUnsafe.user.id);
             console.log('Telegram инициализирован, userId:', this.state.userId);
@@ -258,14 +256,16 @@ class VideoManager {
         console.log('Введённая ссылка:', channelLink);
         if (channelLink && channelLink.match(/^https:\/\/t\.me\/[a-zA-Z0-9_]+$/)) {
             try {
-                const response = await fetch(`${SERVER_URL}/api/register-channel`, {
+                const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/register-channel', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId: this.state.userId, channelName: channelLink })
+                    body: JSON.stringify({ telegram_id: this.state.userId, channel_link: channelLink })
                 });
                 console.log('Ответ /api/register-channel:', response.status);
-                if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
-                const result = await response.json();
+                const responseText = await response.text();
+                console.log('Тело ответа:', responseText);
+                if (!response.ok) throw new Error(`Ошибка сервера: ${response.status} ${responseText}`);
+                const result = JSON.parse(responseText);
                 this.state.channels[this.state.userId] = { videos: [], link: channelLink };
                 localStorage.setItem('channels', JSON.stringify(this.state.channels));
                 console.log('Каналы после регистрации:', this.state.channels);
@@ -284,7 +284,7 @@ class VideoManager {
         if (this.userAvatar && this.tg?.initDataUnsafe?.user?.photo_url) {
             this.userAvatar.src = this.tg.initDataUnsafe.user.photo_url;
         } else {
-            this.userAvatar.src = '/images/default-avatar.png';
+            this.userAvatar.src = '/images/default-avatar.png'; // Локальный аватар
         }
         this.initializeTheme();
         this.initializeTooltips();
@@ -299,7 +299,7 @@ class VideoManager {
 
         try {
             console.log('Попытка загрузить видео с сервера...');
-            const response = await fetch(`${SERVER_URL}/api/public-videos`);
+            const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/public-videos');
             console.log('Ответ /api/public-videos:', response.status);
             if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
             const data = await response.json();
@@ -470,6 +470,7 @@ class VideoManager {
         this.state.startY = e.touches[0].clientY;
         this.state.isSwiping = false;
 
+        // Мгновенно вызываем паузу/воспроизведение, если нет удержания или перетаскивания
         if (!this.state.isHolding && !this.state.isDragging) {
             this.toggleVideoPlayback();
         }
@@ -480,7 +481,7 @@ class VideoManager {
         this.state.endY = e.touches[0].clientY;
         const deltaX = this.state.endX - this.state.startX;
         const deltaY = this.state.endY - this.state.startY;
-        const minMovement = 10;
+        const minMovement = 10; // Минимальное движение для свайпа
         if (Math.abs(deltaX) > minMovement || Math.abs(deltaY) > minMovement) {
             this.state.isSwiping = true;
         }
@@ -493,6 +494,7 @@ class VideoManager {
         const swipeThresholdVertical = 50;
         const minMovement = 10;
 
+        // Игнорируем мелкие движения, чтобы не мешать тапу
         if (Math.abs(deltaX) < minMovement && Math.abs(deltaY) < minMovement) {
             return;
         }
@@ -527,6 +529,7 @@ class VideoManager {
         this.state.startY = e.clientY;
         this.state.isSwiping = false;
 
+        // Мгновенно вызываем паузу/воспроизведение, если нет удержания
         if (!this.state.isHolding) {
             this.toggleVideoPlayback();
         }
@@ -938,22 +941,24 @@ class VideoManager {
         const file = this.state.uploadedFile;
         const description = document.getElementById('videoDescription')?.value || '';
         console.log('Загрузка файла:', file.name, file.type, file.size);
-        console.log('userId:', this.state.userId, 'Описание:', description);
+        console.log('telegram_id:', this.state.userId, 'Описание:', description);
 
         const formData = new FormData();
-        formData.append('video', file);
-        formData.append('userId', this.state.userId);
+        formData.append('file', file);
+        formData.append('telegram_id', this.state.userId);
         formData.append('description', description);
 
         try {
-            const response = await fetch(`${SERVER_URL}/api/upload-video`, {
+            const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/upload-video', {
                 method: 'POST',
                 body: formData
             });
             console.log('Ответ /api/upload-video:', response.status);
-            if (!response.ok) throw new Error(`Ошибка загрузки видео: ${response.status}`);
-            const { video } = await response.json();
-            console.log('Полученный URL:', video.url);
+            const responseText = await response.text();
+            console.log('Тело ответа:', responseText);
+            if (!response.ok) throw new Error(`Ошибка загрузки видео: ${response.status} ${responseText}`);
+            const { url } = JSON.parse(responseText);
+            console.log('Полученный URL:', url);
 
             this.showNotification('Видео успешно опубликовано!');
             this.uploadModal.classList.remove('visible');
@@ -964,12 +969,13 @@ class VideoManager {
                 this.uploadPreview.style.display = 'none';
             }
 
+            // Создаём данные для нового видео с описанием
             const newVideoData = this.createEmptyVideoData(this.state.userId);
             newVideoData.description = description;
-            this.state.playlist.unshift({ url: video.url, data: newVideoData });
+            this.state.playlist.unshift({ url, data: newVideoData });
             this.state.currentIndex = 0;
             this.loadVideo();
-            this.addVideoToManagementList(video.url, description);
+            this.addVideoToManagementList(url, description);
         } catch (error) {
             console.error('Ошибка публикации видео:', error);
             this.showNotification(`Ошибка: ${error.message}`);
@@ -1031,13 +1037,15 @@ class VideoManager {
 
     async deleteVideo(url) {
         try {
-            const response = await fetch(`${SERVER_URL}/api/delete-video`, {
-                method: 'DELETE',
+            const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/delete-video', {
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url })
+                body: JSON.stringify({ url, telegram_id: this.state.userId })
             });
             console.log('Ответ /api/delete-video:', response.status);
-            if (!response.ok) throw new Error(`Ошибка удаления видео: ${response.status}`);
+            const responseText = await response.text();
+            console.log('Тело ответа:', responseText);
+            if (!response.ok) throw new Error(`Ошибка удаления видео: ${response.status} ${responseText}`);
             this.showNotification('Видео успешно удалено!');
             const index = this.state.playlist.findIndex(v => v.url === url);
             if (index !== -1) {
@@ -1190,13 +1198,15 @@ class VideoManager {
         localStorage.setItem(`videoData_${url}`, JSON.stringify(cacheData));
 
         try {
-            const response = await fetch(`${SERVER_URL}/api/update-video`, {
+            const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/update-video', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(cacheData)
             });
             console.log('Ответ /api/update-video:', response.status);
-            if (!response.ok) throw new Error(`Ошибка обновления данных: ${response.status}`);
+            const responseText = await response.text();
+            console.log('Тело ответа:', responseText);
+            if (!response.ok) throw new Error(`Ошибка обновления данных: ${response.status} ${responseText}`);
             console.log('Данные сохранены на сервере');
         } catch (error) {
             console.error('Ошибка обновления данных:', error);
@@ -1381,7 +1391,7 @@ class VideoManager {
         this.uploadBtn.style.setProperty('--progress', '0%');
 
         try {
-            const response = await fetch(`${SERVER_URL}/api/download-video?url=${encodeURIComponent(videoUrl)}`);
+            const response = await fetch(`https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/download-video?url=${encodeURIComponent(videoUrl)}`, { mode: 'cors' });
             console.log('Статус ответа:', response.status, response.statusText);
             if (!response.ok) throw new Error(`Ошибка загрузки: ${response.status} ${response.statusText}`);
 
