@@ -10,7 +10,7 @@ class VideoManager {
             userId: null,
             uploadedFile: null,
             uploadedFileUrl: null,
-            channels: {}, // { userId: { id, channel_name } }
+            channels: {}, // { userId: [{ channel_name, created_at }] }
             isSubmenuOpen: false,
             isProgressBarActivated: false,
             hasViewed: false,
@@ -39,7 +39,7 @@ class VideoManager {
     }
 
     async init() {
-        console.log('Скрипт обновлён, версия 13');
+        console.log('Скрипт обновлён, версия 14');
         if (this.tg?.initDataUnsafe?.user) {
             this.state.userId = String(this.tg.initDataUnsafe.user.id);
             console.log('Telegram инициализирован, userId:', this.state.userId);
@@ -68,16 +68,16 @@ class VideoManager {
                 method: 'GET',
                 headers: { 'Content-Type': 'application/json' }
             });
-            console.log('Ответ /api/channels/:userId:', response.status);
+            console.log('Ответ /api/channels/:userId:', response.status, response.statusText);
             if (!response.ok) {
-                throw new Error(`Ошибка сервера: ${response.status}`);
+                throw new Error(`Ошибка сервера: ${response.status} ${response.statusText}`);
             }
             const channels = await response.json();
-            // Формируем объект channels: { userId: [{ id, channel_name }] }
+            // Формируем объект channels: { userId: [{ channel_name, created_at }] }
             this.state.channels[this.state.userId] = channels.map(channel => ({
-                id: channel.id,
-                channel_name: channel.channel_name
-            }));
+                channel_name: channel.channel_name,
+                created_at: channel.created_at
+            })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             console.log('Каналы загружены из Supabase:', this.state.channels);
         } catch (error) {
             console.error('Ошибка загрузки каналов:', error);
@@ -101,17 +101,18 @@ class VideoManager {
                     channelName
                 })
             });
-            console.log('Ответ /api/channels:', response.status);
+            console.log('Ответ /api/channels:', response.status, response.statusText);
             if (!response.ok) {
-                throw new Error(`Ошибка сервера: ${response.status}`);
+                throw new Error(`Ошибка сервера: ${response.status} ${response.statusText}`);
             }
             const channel = await response.json();
             // Обновляем локальное состояние
             this.state.channels[this.state.userId] = this.state.channels[this.state.userId] || [];
             this.state.channels[this.state.userId].push({
-                id: channel.id,
-                channel_name: channel.channel_name
+                channel_name: channel.channel_name,
+                created_at: channel.created_at
             });
+            this.state.channels[this.state.userId].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             console.log('Каналы после регистрации:', this.state.channels);
             this.showNotification('Канал успешно зарегистрирован!');
             return channel;
@@ -248,7 +249,7 @@ class VideoManager {
             this.showChannelModal(channels);
         } else {
             // Запрашиваем создание нового канала
-            const channelName = prompt('Введите название канала (например, https://t.me/yourchannel):') || 'Мой канал';
+            const channelName = prompt('Введите ссылку на ваш Telegram-канал (например, https://t.me/yourchannel):');
             if (channelName && channelName.match(/^https:\/\/t\.me\/[a-zA-Z0-9_]+$/)) {
                 await this.registerChannel(channelName);
                 this.showPlayer();
@@ -262,19 +263,20 @@ class VideoManager {
     showChannelModal(channels) {
         if (!this.channelModal || !this.channelList) {
             console.error('Модальное окно или список каналов не найдены');
+            this.showNotification('Ошибка интерфейса: модальное окно недоступно');
             return;
         }
         this.channelList.innerHTML = channels.map(channel => `
-            <li data-channel-id="${channel.id}">${channel.channel_name}</li>
+            <li data-channel-name="${channel.channel_name}">${channel.channel_name} (создан: ${new Date(channel.created_at).toLocaleString()})</li>
         `).join('');
         this.channelModal.style.display = 'flex';
 
         // Обработчик выбора канала
         this.channelList.querySelectorAll('li').forEach(item => {
             item.addEventListener('click', () => {
-                const channelId = item.dataset.channelId;
-                console.log('Выбран канал:', channelId, item.textContent);
-                this.showNotification(`Канал "${item.textContent}" выбран!`);
+                const channelName = item.dataset.channelName;
+                console.log('Выбран канал:', channelName);
+                this.showNotification(`Канал "${channelName}" выбран!`);
                 this.closeChannelModal();
                 this.showPlayer();
             });
@@ -283,7 +285,7 @@ class VideoManager {
 
     // Создание нового канала из модального окна
     async handleCreateNewChannel() {
-        const channelName = prompt('Введите название канала (например, https://t.me/yourchannel):') || 'Мой канал';
+        const channelName = prompt('Введите ссылку на ваш Telegram-канал (например, https://t.me/yourchannel):');
         if (channelName && channelName.match(/^https:\/\/t\.me\/[a-zA-Z0-9_]+$/)) {
             await this.registerChannel(channelName);
             this.closeChannelModal();
@@ -318,6 +320,7 @@ class VideoManager {
             this.initializePlayer();
         } else {
             console.error('Ошибка: authScreen или playerContainer не найдены');
+            this.showNotification('Ошибка интерфейса: контейнер плеера недоступен');
         }
     }
 
@@ -407,8 +410,8 @@ class VideoManager {
         try {
             console.log('Попытка загрузить видео с сервера...');
             const response = await fetch(`${SERVER_URL}/api/public-videos`);
-            console.log('Ответ /api/public-videos:', response.status);
-            if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
+            console.log('Ответ /api/public-videos:', response.status, response.statusText);
+            if (!response.ok) throw new Error(`Ошибка сервера: ${response.status} ${response.statusText}`);
             const data = await response.json();
             console.log('Полученные данные:', data);
 
@@ -1058,8 +1061,8 @@ class VideoManager {
                 method: 'POST',
                 body: formData
             });
-            console.log('Ответ /api/upload-video:', response.status);
-            if (!response.ok) throw new Error(`Ошибка загрузки видео: ${response.status}`);
+            console.log('Ответ /api/upload-video:', response.status, response.statusText);
+            if (!response.ok) throw new Error(`Ошибка загрузки видео: ${response.status} ${response.statusText}`);
             const { video } = await response.json();
             console.log('Полученный URL:', video.url);
 
@@ -1144,8 +1147,8 @@ class VideoManager {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url })
             });
-            console.log('Ответ /api/delete-video:', response.status);
-            if (!response.ok) throw new Error(`Ошибка удаления видео: ${response.status}`);
+            console.log('Ответ /api/delete-video:', response.status, response.statusText);
+            if (!response.ok) throw new Error(`Ошибка удаления видео: ${response.status} ${response.statusText}`);
             this.showNotification('Видео успешно удалено!');
             const index = this.state.playlist.findIndex(v => v.url === url);
             if (index !== -1) {
@@ -1303,8 +1306,8 @@ class VideoManager {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(cacheData)
             });
-            console.log('Ответ /api/update-video:', response.status);
-            if (!response.ok) throw new Error(`Ошибка обновления данных: ${response.status}`);
+            console.log('Ответ /api/update-video:', response.status, response.statusText);
+            if (!response.ok) throw new Error(`Ошибка обновления данных: ${response.status} ${response.statusText}`);
             console.log('Данные сохранены на сервере');
         } catch (error) {
             console.error('Ошибка обновления данных:', error);
@@ -1611,5 +1614,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('VideoManager успешно инициализирован');
     } catch (error) {
         console.error('Ошибка инициализации VideoManager:', error);
+        videoManager.showNotification('Ошибка инициализации приложения');
     }
 });
