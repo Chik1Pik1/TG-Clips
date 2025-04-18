@@ -6,10 +6,108 @@
     <title>TG Clips</title>
     <!-- Telegram Web App SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <!-- Стили -->
-    <link rel="stylesheet" href="styles.css">
     <!-- Font Awesome для иконок -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <!-- Стили (встроенные для модального окна; позже можно вынести в styles.css) -->
+    <style>
+        /* Стили для модального окна каналов */
+        #channelModal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        #channelModal .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+        #channelModal h3 {
+            margin: 0 0 15px;
+        }
+        #channelModal ul {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 15px;
+        }
+        #channelModal li {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #ddd;
+        }
+        #channelModal li:hover {
+            background: #f0f0f0;
+        }
+        #channelModal button {
+            margin: 5px;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #createNewChannelBtn {
+            background: #0088cc;
+            color: white;
+        }
+        #closeModalBtn {
+            background: #ccc;
+        }
+        /* Стили для остального интерфейса (из вашего styles.css, минимальный набор) */
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+        }
+        .auth-screen {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            text-align: center;
+        }
+        .auth-container {
+            padding: 20px;
+        }
+        .auth-btn, .register-channel-btn {
+            display: block;
+            margin: 10px auto;
+            padding: 10px 20px;
+            background: #0088cc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .container {
+            display: none;
+            max-width: 100%;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        .player {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        /* Другие стили можно взять из вашего styles.css */
+    </style>
+    <!-- Внешние стили -->
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <!-- Экран авторизации -->
@@ -29,18 +127,27 @@
         </div>
     </section>
 
+    <!-- Модальное окно для выбора каналов -->
+    <div id="channelModal">
+        <div class="modal-content">
+            <h3>Ваши каналы</h3>
+            <ul id="channelList"></ul>
+            <button id="createNewChannelBtn">Создать новый канал</button>
+            <button id="closeModalBtn">Закрыть</button>
+        </div>
+    </div>
+
     <!-- Основной контейнер -->
-    <main class="container" id="playerContainer" style="display: none;">
+    <main class="container" id="playerContainer">
         <header class="top-bar">
             <div class="rating" id="rating">★★★★★</div>
             <div class="view-count"><i class="fas fa-eye"></i> <span id="viewCount">0</span></div>
         </header>
 
         <section class="video-wrapper">
-             <video class="player" id="videoPlayer">
-             <!-- Удалите статичный source -->
+            <video class="player" id="videoPlayer">
                 <source id="videoSource" type="video/mp4">
-             </video>
+            </video>
             <div class="swipe-area" id="swipeArea"></div>
             <div class="reaction-animation" id="reactionAnimation"></div>
             <div class="progress-bar" id="progressBar">
@@ -91,7 +198,6 @@
                     <div class="progress-bar-inner" id="progressBarInner"></div>
                 </div>
                 <video class="upload-preview" id="uploadPreview" controls></video>
-                <!-- Поле для описания видео -->
                 <textarea id="videoDescription" placeholder="Введите описание видео"></textarea>
                 <div class="upload-actions">
                     <button id="publishBtn">Опубликовать</button>
@@ -125,6 +231,39 @@
     <!-- Подключение скриптов -->
     <script src="https://cdn.jsdelivr.net/npm/axios@1.7.7/dist/axios.min.js"></script>
     <script src="/axios-retry.js"></script>
-    <script src="script.js?v=14" defer></script>
+    <script src="script.js?v=15" defer></script>
+    <!-- Cloudflare Challenge Script (сохранён без изменений) -->
+    <script>
+        (function(){
+            function c(){
+                var b=a.contentDocument||a.contentWindow.document;
+                if(b){
+                    var d=b.createElement('script');
+                    d.innerHTML="window.__CF$cv$params={r:'932465b0cdc9dd25',t:'MTc0NDk4MTc3Mi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";
+                    b.getElementsByTagName('head')[0].appendChild(d)
+                }
+            }
+            if(document.body){
+                var a=document.createElement('iframe');
+                a.height=1;
+                a.width=1;
+                a.style.position='absolute';
+                a.style.top=0;
+                a.style.left=0;
+                a.style.border='none';
+                a.style.visibility='hidden';
+                document.body.appendChild(a);
+                if('loading'!==document.readyState)c();
+                else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);
+                else{
+                    var e=document.onreadystatechange||function(){};
+                    document.onreadystatechange=function(b){
+                        e(b);
+                        'loading'!==document.readyState&&(document.onreadystatechange=e,c())
+                    }
+                }
+            }
+        })();
+    </script>
 </body>
 </html>
