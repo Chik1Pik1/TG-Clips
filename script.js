@@ -22,7 +22,8 @@ class VideoManager {
             startX: 0,
             startY: 0,
             endX: 0,
-            endY: 0
+            endY: 0,
+            isUserInitiated: false // Новый флаг для отслеживания взаимодействия пользователя
         };
         this.tg = window.Telegram?.WebApp;
         this.MAX_PRELOAD_SIZE = 3;
@@ -39,7 +40,7 @@ class VideoManager {
     }
 
     async init() {
-        console.log('Скрипт обновлён, версия 14');
+        console.log('Скрипт обновлён, версия 15');
         if (this.tg?.initDataUnsafe?.user) {
             this.state.userId = String(this.tg.initDataUnsafe.user.id);
             console.log('Telegram инициализирован, userId:', this.state.userId);
@@ -68,10 +69,14 @@ class VideoManager {
                 return acc;
             }, {});
             console.log('Каналы загружены из Supabase:', this.state.channels);
+            localStorage.setItem('cachedChannels', JSON.stringify(this.state.channels));
         } catch (error) {
             console.error('Ошибка загрузки каналов:', error.message, error.stack);
             this.showNotification(`Не удалось загрузить каналы: ${error.message}${this.tg ? '. Попробуйте обновить страницу.' : ''}`);
-            this.state.channels = {};
+            // Fallback: использовать кэшированные каналы или пустой объект
+            const cachedChannels = localStorage.getItem('cachedChannels');
+            this.state.channels = cachedChannels ? JSON.parse(cachedChannels) : {};
+            console.log('Используются кэшированные каналы:', this.state.channels);
         }
     }
 
@@ -149,6 +154,8 @@ class VideoManager {
             this.video.addEventListener('pause', () => this.handlePause());
             this.video.addEventListener('ended', () => this.handleEnded());
             this.video.addEventListener('timeupdate', () => this.handleTimeUpdate());
+            // Добавляем обработчик клика для воспроизведения
+            this.video.addEventListener('click', () => this.handleVideoClick());
         }
         bindButton(this.progressRange, (e) => this.handleProgressInput(e), '#progressRange');
         this.setupSwipeAndMouseEvents();
@@ -208,6 +215,16 @@ class VideoManager {
                 }
                 await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
             }
+        }
+    }
+
+    handleVideoClick() {
+        this.state.isUserInitiated = true;
+        if (this.video.paused) {
+            this.video.play().catch(err => {
+                console.error('Play error:', err.message, err.stack);
+                this.showNotification(`Не удалось воспроизвести видео: ${err.message}. Кликните по видео для воспроизведения.`);
+            });
         }
     }
 
@@ -312,6 +329,7 @@ class VideoManager {
                 if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
                 this.state.channels[this.state.userId] = { link: channelLink, videos: [] };
                 console.log('Каналы после регистрации:', this.state.channels);
+                localStorage.setItem('cachedChannels', JSON.stringify(this.state.channels));
                 this.showNotification('Канал успешно зарегистрирован!');
                 this.showPlayer();
             } catch (error) {
@@ -417,10 +435,6 @@ class VideoManager {
         if (!this.video) return;
         this.video.muted = true;
         this.video.load();
-        this.video.play().catch(err => {
-            console.error('Play error:', err.message, err.stack);
-            this.video.muted = false;
-        });
         const videoData = this.state.playlist[this.state.currentIndex]?.data;
         if (videoData) {
             videoData.duration = this.video.duration;
@@ -429,6 +443,8 @@ class VideoManager {
             this.updateVideoCache(this.state.currentIndex);
             this.updateRating();
         }
+        // Не запускаем play() автоматически, ждём клика пользователя
+        this.showNotification('Кликните по видео, чтобы начать воспроизведение.');
     }
 
     handlePlay() {
@@ -650,6 +666,7 @@ class VideoManager {
         this.recommendNextVideo();
         this.loadVideo('left');
         this.state.hasViewed = false;
+        this.state.isUserInitiated = false; // Сбрасываем флаг
     }
 
     playPreviousVideo() {
@@ -660,6 +677,7 @@ class VideoManager {
         this.state.currentIndex = (this.state.currentIndex - 1 + this.state.playlist.length) % this.state.playlist.length;
         this.loadVideo('right');
         this.state.hasViewed = false;
+        this.state.isUserInitiated = false; // Сбрасываем флаг
     }
 
     loadVideo(direction = 'left') {
@@ -696,10 +714,15 @@ class VideoManager {
                 if (lastPosition > 0 && lastPosition < this.video.duration) {
                     this.video.currentTime = lastPosition;
                 }
-                this.video.play().catch(err => {
-                    console.error('Play error:', err.message, err.stack);
-                    this.showNotification(`Не удалось воспроизвести видео: ${err.message}${this.tg ? '. Попробуйте снова.' : ''}`);
-                });
+                // Запускаем воспроизведение только если пользователь инициировал
+                if (this.state.isUserInitiated) {
+                    this.video.play().catch(err => {
+                        console.error('Play error:', err.message, err.stack);
+                        this.showNotification(`Не удалось воспроизвести видео: ${err.message}. Кликните по видео для воспроизведения.`);
+                    });
+                } else {
+                    this.showNotification('Кликните по видео, чтобы начать воспроизведение.');
+                }
             }, { once: true });
             this.updateCounters();
             this.updateComments();
@@ -1307,10 +1330,11 @@ class VideoManager {
     }
 
     toggleVideoPlayback() {
+        this.state.isUserInitiated = true;
         if (this.video.paused) {
             this.video.play().catch(err => {
                 console.error('Play error:', err.message, err.stack);
-                this.showNotification(`Не удалось воспроизвести видео: ${err.message}${this.tg ? '. Попробуйте снова.' : ''}`);
+                this.showNotification(`Не удалось воспроизвести видео: ${err.message}. Кликните по видео для воспроизведения.`);
             });
         } else {
             this.video.pause();
@@ -1524,25 +1548,4 @@ class VideoManager {
                     .then(() => document.body.classList.add('fullscreen-mode'))
                     .catch(err => {
                         console.error('Ошибка полноэкранного режима:', err.message, err.stack);
-                        this.showNotification('Полноэкранный режим не поддерживается');
-                    });
-            } else {
-                document.exitFullscreen()
-                    .then(() => document.body.classList.remove('fullscreen-mode'))
-                    .catch(err => console.error('Ошибка выхода из полноэкранного режима:', err.message, err.stack));
-            }
-        } else {
-            this.showNotification('Полноэкранный режим недоступен');
-        }
-    }
-}
-
-document.addEventListener('DOMContentLoaded', async () => {
-    const videoManager = new VideoManager();
-    try {
-        await videoManager.init();
-        console.log('VideoManager успешно инициализирован');
-    } catch (error) {
-        console.error('Ошибка инициализации VideoManager:', error.message, error.stack);
-    }
-});
+                        this.showNotification('Полно
