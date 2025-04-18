@@ -1,4 +1,4 @@
-const SERVER_URL = 'https://youthful-asp-tgcl1ps-e1547e2a.koyeb.app';
+const SERVER_URL = 'https://tg-clips.andrej-vorontszov.workers.dev';
 
 class VideoManager {
     constructor() {
@@ -10,7 +10,7 @@ class VideoManager {
             userId: null,
             uploadedFile: null,
             uploadedFileUrl: null,
-            channels: JSON.parse(localStorage.getItem('channels')) || {},
+            channels: {}, // Теперь будет синхронизироваться с Supabase
             isSubmenuOpen: false,
             isProgressBarActivated: false,
             hasViewed: false,
@@ -39,7 +39,7 @@ class VideoManager {
     }
 
     async init() {
-        console.log('Скрипт обновлён, версия 11');
+        console.log('Скрипт обновлён, версия 12');
         if (this.tg?.initDataUnsafe?.user) {
             this.state.userId = String(this.tg.initDataUnsafe.user.id);
             console.log('Telegram инициализирован, userId:', this.state.userId);
@@ -47,12 +47,34 @@ class VideoManager {
             this.state.userId = 'testUser_' + Date.now();
             console.log('Тестовый userId:', this.state.userId);
         }
+
+        // Загружаем каналы из Supabase
+        await this.loadChannels();
         console.log('Зарегистрированные каналы:', this.state.channels);
 
         this.bindElements();
         this.bindEvents();
         await this.loadInitialVideos();
         this.showPlayer();
+    }
+
+    async loadChannels() {
+        try {
+            const response = await fetch(`${SERVER_URL}/api/channels`);
+            console.log('Ответ /api/channels:', response.status);
+            if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
+            const channels = await response.json();
+            // Формируем объект channels в формате { userId: { link: channel_name } }
+            this.state.channels = channels.reduce((acc, channel) => {
+                acc[channel.user_id] = { link: channel.channel_name, videos: [] };
+                return acc;
+            }, {});
+            console.log('Каналы загружены из Supabase:', this.state.channels);
+        } catch (error) {
+            console.error('Ошибка загрузки каналов:', error);
+            this.showNotification('Не удалось загрузить каналы: ' + error.message);
+            this.state.channels = {};
+        }
     }
 
     bindElements() {
@@ -189,7 +211,7 @@ class VideoManager {
             return;
         }
 
-        this.userAvatar.addEventListener('click', (e) => {
+        this.userAvatar.addEventListener('click', async (e) => {
             e.stopPropagation();
             console.log('Клик по аватару, userId:', this.state.userId);
             console.log('Каналы:', this.state.channels);
@@ -212,7 +234,7 @@ class VideoManager {
                 } else {
                     this.showNotification('Канал не зарегистрирован. Зарегистрируйте его!');
                     console.log('Вызов registerChannel');
-                    this.registerChannel();
+                    await this.registerChannel();
                 }
             }
         });
@@ -266,8 +288,8 @@ class VideoManager {
                 console.log('Ответ /api/register-channel:', response.status);
                 if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
                 const result = await response.json();
-                this.state.channels[this.state.userId] = { videos: [], link: channelLink };
-                localStorage.setItem('channels', JSON.stringify(this.state.channels));
+                // Обновляем локальное состояние
+                this.state.channels[this.state.userId] = { link: channelLink, videos: [] };
                 console.log('Каналы после регистрации:', this.state.channels);
                 this.showNotification('Канал успешно зарегистрирован!');
                 this.showPlayer();
@@ -767,7 +789,7 @@ class VideoManager {
         }
     }
 
-    handleAvatarClick(userId) {
+    async handleAvatarClick(userId) {
         console.log('Клик по аватару комментария, userId:', userId);
         const channel = this.state.channels[userId];
         if (channel?.link) {
