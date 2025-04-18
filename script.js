@@ -10,7 +10,7 @@ class VideoManager {
             userId: null,
             uploadedFile: null,
             uploadedFileUrl: null,
-            channels: {}, // Теперь будет синхронизироваться с Supabase
+            channels: {},
             isSubmenuOpen: false,
             isProgressBarActivated: false,
             hasViewed: false,
@@ -39,7 +39,7 @@ class VideoManager {
     }
 
     async init() {
-        console.log('Скрипт обновлён, версия 12');
+        console.log('Скрипт обновлён, версия 13');
         if (this.tg?.initDataUnsafe?.user) {
             this.state.userId = String(this.tg.initDataUnsafe.user.id);
             console.log('Telegram инициализирован, userId:', this.state.userId);
@@ -48,7 +48,6 @@ class VideoManager {
             console.log('Тестовый userId:', this.state.userId);
         }
 
-        // Загружаем каналы из Supabase
         await this.loadChannels();
         console.log('Зарегистрированные каналы:', this.state.channels);
 
@@ -60,11 +59,10 @@ class VideoManager {
 
     async loadChannels() {
         try {
-            const response = await fetch(`${SERVER_URL}/api/channels`);
+            const response = await this.retryFetch(`${SERVER_URL}/api/channels`, { method: 'GET' });
             console.log('Ответ /api/channels:', response.status);
             if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
             const channels = await response.json();
-            // Формируем объект channels в формате { userId: { link: channel_name } }
             this.state.channels = channels.reduce((acc, channel) => {
                 acc[channel.user_id] = { link: channel.channel_name, videos: [] };
                 return acc;
@@ -181,7 +179,27 @@ class VideoManager {
         }
         bindButton(document.querySelector('.fullscreen-btn'), (e) => this.toggleFullscreen(e), '.fullscreen-btn');
         document.addEventListener('click', (e) => this.hideManagementListOnClickOutside(e));
+        window.addEventListener('beforeunload', () => {
+            if (this.state.playlist && this.state.currentIndex >= 0) {
+                this.updateVideoCache(this.state.currentIndex);
+            }
+        });
         this.bindUserAvatar();
+    }
+
+    async retryFetch(url, options, maxRetries = 3) {
+        let attempt = 0;
+        while (attempt < maxRetries) {
+            try {
+                const response = await fetch(url, options);
+                if (response.ok) return response;
+                throw new Error(`HTTP error: ${response.status}`);
+            } catch (error) {
+                attempt++;
+                if (attempt === maxRetries) throw error;
+                await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+            }
+        }
     }
 
     handleAuth() {
@@ -214,7 +232,6 @@ class VideoManager {
         this.userAvatar.addEventListener('click', async (e) => {
             e.stopPropagation();
             console.log('Клик по аватару, userId:', this.state.userId);
-            console.log('Каналы:', this.state.channels);
             if (!this.state.isHolding) {
                 const channel = this.state.channels[this.state.userId];
                 if (channel?.link) {
@@ -222,10 +239,8 @@ class VideoManager {
                     try {
                         if (this.tg && this.tg.openTelegramLink) {
                             this.tg.openTelegramLink(channel.link);
-                            console.log('Вызван tg.openTelegramLink:', channel.link);
                         } else {
                             window.open(channel.link, '_blank');
-                            console.log('Открыт в новой вкладке:', channel.link);
                         }
                     } catch (error) {
                         console.error('Ошибка перехода на канал:', error);
@@ -233,7 +248,6 @@ class VideoManager {
                     }
                 } else {
                     this.showNotification('Канал не зарегистрирован. Зарегистрируйте его!');
-                    console.log('Вызов registerChannel');
                     await this.registerChannel();
                 }
             }
@@ -280,15 +294,13 @@ class VideoManager {
         console.log('Введённая ссылка:', channelLink);
         if (channelLink && channelLink.match(/^https:\/\/t\.me\/[a-zA-Z0-9_]+$/)) {
             try {
-                const response = await fetch(`${SERVER_URL}/api/register-channel`, {
+                const response = await this.retryFetch(`${SERVER_URL}/api/register-channel`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ userId: this.state.userId, channelName: channelLink })
                 });
                 console.log('Ответ /api/register-channel:', response.status);
                 if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
-                const result = await response.json();
-                // Обновляем локальное состояние
                 this.state.channels[this.state.userId] = { link: channelLink, videos: [] };
                 console.log('Каналы после регистрации:', this.state.channels);
                 this.showNotification('Канал успешно зарегистрирован!');
@@ -303,10 +315,8 @@ class VideoManager {
     }
 
     initializePlayer() {
-        if (this.userAvatar && this.tg?.initDataUnsafe?.user?.photo_url) {
-            this.userAvatar.src = this.tg.initDataUnsafe.user.photo_url;
-        } else {
-            this.userAvatar.src = '/images/default-avatar.png';
+        if (this.userAvatar) {
+            this.userAvatar.src = this.tg?.initDataUnsafe?.user?.photo_url || '/images/default-avatar.png';
         }
         this.initializeTheme();
         this.initializeTooltips();
@@ -321,7 +331,7 @@ class VideoManager {
 
         try {
             console.log('Попытка загрузить видео с сервера...');
-            const response = await fetch(`${SERVER_URL}/api/public-videos`);
+            const response = await this.retryFetch(`${SERVER_URL}/api/public-videos`, { method: 'GET' });
             console.log('Ответ /api/public-videos:', response.status);
             if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
             const data = await response.json();
@@ -389,10 +399,11 @@ class VideoManager {
     handleLoadedMetadata() {
         if (!this.video) return;
         this.video.muted = true;
-        this.video.play().then(() => {
-            this.video.pause();
+        this.video.load();
+        this.video.play().catch(err => {
+            console.error('Play error:', err);
             this.video.muted = false;
-        }).catch(err => console.error('Unlock error:', err));
+        });
         const videoData = this.state.playlist[this.state.currentIndex]?.data;
         if (videoData) {
             videoData.duration = this.video.duration;
@@ -454,11 +465,15 @@ class VideoManager {
             return;
         }
         const videoData = this.state.playlist[this.state.currentIndex].data;
-        videoData.viewTime += this.video.currentTime - this.state.lastTime;
-        videoData.lastPosition = this.video.currentTime;
-        this.state.lastTime = this.video.currentTime;
-        this.progressRange.value = this.video.currentTime;
-        this.updateVideoCache(this.state.currentIndex);
+        const currentTime = this.video.currentTime;
+        const timeDiff = currentTime - this.state.lastTime;
+        if (timeDiff >= 1) {
+            videoData.viewTime += timeDiff;
+            videoData.lastPosition = currentTime;
+            this.state.lastTime = currentTime;
+            this.progressRange.value = currentTime;
+            this.updateVideoCache(this.state.currentIndex);
+        }
         this.updateRating();
     }
 
@@ -491,7 +506,6 @@ class VideoManager {
         this.state.startX = e.touches[0].clientX;
         this.state.startY = e.touches[0].clientY;
         this.state.isSwiping = false;
-
         if (!this.state.isHolding && !this.state.isDragging) {
             this.toggleVideoPlayback();
         }
@@ -548,7 +562,6 @@ class VideoManager {
         this.state.startX = e.clientX;
         this.state.startY = e.clientY;
         this.state.isSwiping = false;
-
         if (!this.state.isHolding) {
             this.toggleVideoPlayback();
         }
@@ -569,7 +582,6 @@ class VideoManager {
     handleMouseEnd(e) {
         if (!this.state.isDragging) return;
         this.state.isDragging = false;
-
         const deltaX = this.state.endX - this.state.startX;
         const deltaY = this.state.endY - this.state.startY;
         const swipeThresholdHorizontal = 50;
@@ -651,6 +663,7 @@ class VideoManager {
         this.video.pause();
         setTimeout(() => {
             this.videoSource.src = this.state.playlist[this.state.currentIndex].url;
+            this.videoSource.setAttribute('cache-control', 'no-cache');
             this.video.load();
             const timeout = setTimeout(() => {
                 if (!this.video.readyState) {
@@ -666,7 +679,7 @@ class VideoManager {
                 if (lastPosition > 0 && lastPosition < this.video.duration) {
                     this.showResumePrompt(lastPosition);
                 } else {
-                    this.video.play().catch(err => console.log("Ошибка воспроизведения:", err));
+                    this.video.play().catch(err => console.error("Play error:", err));
                 }
             }, { once: true });
             this.updateCounters();
@@ -693,13 +706,13 @@ class VideoManager {
 
         document.getElementById('resumeYes').addEventListener('click', () => {
             this.video.currentTime = lastPosition;
-            this.video.play();
+            this.video.play().catch(err => console.error("Play error:", err));
             document.body.removeChild(resumePrompt);
         });
 
         document.getElementById('resumeNo').addEventListener('click', () => {
             this.video.currentTime = 0;
-            this.video.play();
+            this.video.play().catch(err => console.error("Play error:", err));
             document.body.removeChild(resumePrompt);
         });
     }
@@ -968,10 +981,7 @@ class VideoManager {
         formData.append('description', description);
 
         try {
-            const response = await fetch(`${SERVER_URL}/api/upload-video`, {
-                method: 'POST',
-                body: formData
-            });
+            const response = await this.retryFetch(`${SERVER_URL}/api/upload-video`, { method: 'POST', body: formData });
             console.log('Ответ /api/upload-video:', response.status);
             if (!response.ok) throw new Error(`Ошибка загрузки видео: ${response.status}`);
             const { video } = await response.json();
@@ -1053,7 +1063,7 @@ class VideoManager {
 
     async deleteVideo(url) {
         try {
-            const response = await fetch(`${SERVER_URL}/api/delete-video`, {
+            const response = await this.retryFetch(`${SERVER_URL}/api/delete-video`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url })
@@ -1206,23 +1216,29 @@ class VideoManager {
             duration: videoData.duration,
             last_position: videoData.lastPosition,
             chat_messages: videoData.chatMessages,
-            description: videoData.description
+            description: videoData.description,
+            author_id: videoData.authorId
         };
-        console.log('Отправляемые данные для обновления:', cacheData);
         localStorage.setItem(`videoData_${url}`, JSON.stringify(cacheData));
 
-        try {
-            const response = await fetch(`${SERVER_URL}/api/update-video`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(cacheData)
-            });
-            console.log('Ответ /api/update-video:', response.status);
-            if (!response.ok) throw new Error(`Ошибка обновления данных: ${response.status}`);
-            console.log('Данные сохранены на сервере');
-        } catch (error) {
-            console.error('Ошибка обновления данных:', error);
-            this.showNotification('Не удалось сохранить данные!');
+        if (!this.updateVideoCache.debounceTimer) {
+            this.updateVideoCache.debounceTimer = setTimeout(async () => {
+                try {
+                    const response = await this.retryFetch(`${SERVER_URL}/api/update-video`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(cacheData)
+                    });
+                    console.log('Ответ /api/update-video:', response.status);
+                    if (!response.ok) throw new Error(`Ошибка обновления данных: ${response.status}`);
+                    console.log('Данные сохранены на сервере');
+                } catch (error) {
+                    console.error('Ошибка обновления данных:', error);
+                    this.showNotification('Не удалось сохранить данные!');
+                } finally {
+                    this.updateVideoCache.debounceTimer = null;
+                }
+            }, 5000);
         }
     }
 
@@ -1262,6 +1278,7 @@ class VideoManager {
     }
 
     showNotification(message) {
+        console.error('Notification:', message);
         const notification = document.createElement('div');
         notification.style.cssText = `
             position: fixed; top: 10%; left: 50%; transform: translateX(-50%);
@@ -1403,7 +1420,7 @@ class VideoManager {
         this.uploadBtn.style.setProperty('--progress', '0%');
 
         try {
-            const response = await fetch(`${SERVER_URL}/api/download-video?url=${encodeURIComponent(videoUrl)}`);
+            const response = await this.retryFetch(`${SERVER_URL}/api/download-video?url=${encodeURIComponent(videoUrl)}`, { method: 'GET' });
             console.log('Статус ответа:', response.status, response.statusText);
             if (!response.ok) throw new Error(`Ошибка загрузки: ${response.status} ${response.statusText}`);
 
@@ -1422,7 +1439,12 @@ class VideoManager {
                 this.uploadBtn.style.setProperty('--progress', `${progress}%`);
             }
 
-            const blob = new Blob(chunks, { type: response.headers.get('content-type') || 'video/mp4' });
+            const contentType = response.headers.get('content-type') || 'video/mp4';
+            if (!contentType.startsWith('video/')) {
+                throw new Error('Получен неверный тип контента: ' + contentType);
+            }
+
+            const blob = new Blob(chunks, { type: contentType });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
