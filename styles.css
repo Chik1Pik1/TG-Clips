@@ -1520,3 +1520,118 @@ body.telegram-fullscreen .view-count {
     background: rgba(0, 0, 0, 0.3);
     transition: width 0.1s linear;
 }
+
+/* Модальное окно для выбора каналов */
+#channelModal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--modal-bg);
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    animation: fadeIn 0.3s ease;
+}
+
+#channelModal.visible {
+    display: flex;
+}
+
+#channelModal .modal-content {
+    background: var(--modal-content-bg);
+    padding: 30px;
+    border-radius: 12px;
+    max-width: 500px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    transition: background 0.3s ease;
+}
+
+body.dark #channelModal .modal-content {
+    background: var(--modal-content-dark);
+}
+
+#channelModal h3 {
+    margin: 0 0 20px;
+    font-size: 1.5rem;
+    color: var(--text-light);
+}
+
+body.dark #channelModal h3 {
+    color: var(--text-dark);
+}
+
+#channelModal ul {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 20px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+#channelModal li {
+    padding: 15px;
+    font-size: 1rem;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-color);
+    transition: background 0.2s ease;
+}
+
+body.dark #channelModal li {
+    border-bottom: 1px solid var(--border-dark);
+}
+
+#channelModal li:hover {
+    background: #f0f0f0;
+}
+
+body.dark #channelModal li:hover {
+    background: #333;
+}
+
+#channelModal li:last-child {
+    border-bottom: none;
+}
+
+#channelModal button {
+    margin: 5px;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.3s ease, transform 0.2s ease;
+}
+
+#createNewChannelBtn {
+    background: var(--primary-color);
+    color: #fff;
+}
+
+#createNewChannelBtn:hover {
+    background: var(--primary-hover);
+    transform: translateY(-2px);
+}
+
+#closeModalBtn {
+    background: #ccc;
+    color: #333;
+}
+
+body.dark #closeModalBtn {
+    background: #555;
+    color: #fff;
+}
+
+#closeModalBtn:hover {
+    background: #aaa;
+    transform: translateY(-2px);
+}
+
+body.dark #closeModalBtn:hover {
+    background: #666;
+}
