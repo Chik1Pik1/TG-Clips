@@ -40,7 +40,7 @@ class VideoManager {
     }
 
     async init() {
-        console.log('Script updated, version 17');
+        console.log('Script updated, version 18');
         if (this.tg?.initDataUnsafe?.user) {
             this.state.userId = String(this.tg.initDataUnsafe.user.id);
             console.log('Telegram initialized, userId:', this.state.userId);
@@ -200,7 +200,8 @@ class VideoManager {
                     ...options,
                     headers: {
                         ...options.headers,
-                        'Accept': 'application/json'
+                        'Accept': 'application/json',
+                        'User-Agent': this.tg ? 'TelegramWebApp' : 'Browser'
                     }
                 });
                 if (response.ok) return response;
@@ -221,7 +222,7 @@ class VideoManager {
         if (this.video.paused) {
             this.video.play().catch(err => {
                 console.error('Play error:', err.message, err.stack);
-                this.showNotification(`Failed to play video: ${err.message}. Click the video to play.`);
+                this.showNotification(`Failed to play video: ${err.message}`);
             });
         }
     }
@@ -364,32 +365,31 @@ class VideoManager {
             console.log('Received data:', data);
 
             if (!data || !Array.isArray(data) || data.length === 0) {
-                console.warn('Server returned empty or invalid response, using stock videos');
-                this.state.playlist = stockVideos;
-            } else {
-                this.state.playlist = data.map(video => ({
-                    url: video.url,
-                    data: {
-                        views: new Set(video.views || []),
-                        likes: video.likes || 0,
-                        dislikes: video.dislikes || 0,
-                        userLikes: new Set(video.user_likes || []),
-                        userDislikes: new Set(video.user_dislikes || []),
-                        comments: video.comments || [],
-                        shares: video.shares || 0,
-                        viewTime: video.view_time || 0,
-                        replays: video.replays || 0,
-                        duration: video.duration || 0,
-                        authorId: video.author_id,
-                        lastPosition: video.last_position || 0,
-                        chatMessages: video.chat_messages || [],
-                        description: video.description || ''
-                    }
-                }));
+                console.warn('Server returned empty or invalid response, trying cached videos');
+                throw new Error('Empty server response');
             }
+            this.state.playlist = data.map(video => ({
+                url: video.url,
+                data: {
+                    views: new Set(video.views || []),
+                    likes: video.likes || 0,
+                    dislikes: video.dislikes || 0,
+                    userLikes: new Set(video.user_likes || []),
+                    userDislikes: new Set(video.user_dislikes || []),
+                    comments: video.comments || [],
+                    shares: video.shares || 0,
+                    viewTime: video.view_time || 0,
+                    replays: video.replays || 0,
+                    duration: video.duration || 0,
+                    authorId: video.author_id,
+                    lastPosition: video.last_position || 0,
+                    chatMessages: video.chat_messages || [],
+                    description: video.description || ''
+                }
+            }));
         } catch (error) {
             console.error('Error loading videos from server:', error.message, error.stack);
-            this.showNotification(`Failed to load videos: ${error.message}${this.tg ? '. Using local videos.' : ''}`);
+            this.showNotification(`Failed to load videos${this.tg ? '. Using cached or local videos.' : ''}`);
             const cachedVideos = localStorage.getItem('cachedVideos');
             if (cachedVideos) {
                 this.state.playlist = JSON.parse(cachedVideos);
@@ -442,7 +442,6 @@ class VideoManager {
             this.updateVideoCache(this.state.currentIndex);
             this.updateRating();
         }
-        this.showNotification('Click the video to start playback.');
     }
 
     handlePlay() {
@@ -715,10 +714,8 @@ class VideoManager {
                 if (this.state.isUserInitiated) {
                     this.video.play().catch(err => {
                         console.error('Play error:', err.message, err.stack);
-                        this.showNotification(`Failed to play video: ${err.message}. Click the video to play.`);
+                        this.showNotification(`Failed to play video: ${err.message}`);
                     });
-                } else {
-                    this.showNotification('Click the video to start playback.');
                 }
             }, { once: true });
             this.updateCounters();
@@ -1332,7 +1329,7 @@ class VideoManager {
         if (this.video.paused) {
             this.video.play().catch(err => {
                 console.error('Play error:', err.message, err.stack);
-                this.showNotification(`Failed to play video: ${err.message}. Click the video to play.`);
+                this.showNotification(`Failed to play video: ${err.message}`);
             });
         } else {
             this.video.pause();
