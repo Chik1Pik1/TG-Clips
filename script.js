@@ -23,7 +23,7 @@ class VideoManager {
             endY: 0
         };
         this.tg = window.Telegram?.WebApp;
-        this.apiBaseUrl = 'https://your-vercel-app.vercel.app/api'; // Замените на ваш Vercel URL
+        this.apiBaseUrl = 'https://supabase-server-five.vercel.app'; // Замените на ваш Vercel URL
         this.MAX_PRELOAD_SIZE = 3;
         this.MAX_PLAYLIST_SIZE = 10;
 
