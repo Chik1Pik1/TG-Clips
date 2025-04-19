@@ -23,6 +23,7 @@ class VideoManager {
             endY: 0
         };
         this.tg = window.Telegram?.WebApp;
+        this.apiBaseUrl = 'https://your-vercel-app.vercel.app/api'; // Замените на ваш Vercel URL
         this.MAX_PRELOAD_SIZE = 3;
         this.MAX_PLAYLIST_SIZE = 10;
 
@@ -37,7 +38,7 @@ class VideoManager {
     }
 
     async init() {
-        console.log('Скрипт обновлён, версия 10');
+        console.log('Скрипт обновлён, версия 11');
         if (this.tg?.initDataUnsafe?.user) {
             this.state.userId = String(this.tg.initDataUnsafe.user.id);
             console.log('Telegram инициализирован, userId:', this.state.userId);
@@ -256,16 +257,17 @@ class VideoManager {
         console.log('Введённая ссылка:', channelLink);
         if (channelLink && channelLink.match(/^https:\/\/t\.me\/[a-zA-Z0-9_]+$/)) {
             try {
-                const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/register-channel', {
+                const response = await fetch(`${this.apiBaseUrl}/register-channel`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ telegram_id: this.state.userId, channel_link: channelLink })
                 });
                 console.log('Ответ /api/register-channel:', response.status);
-                const responseText = await response.text();
-                console.log('Тело ответа:', responseText);
-                if (!response.ok) throw new Error(`Ошибка сервера: ${response.status} ${responseText}`);
-                const result = JSON.parse(responseText);
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Ошибка сервера: ${response.status} ${errorText}`);
+                }
+                const result = await response.json();
                 this.state.channels[this.state.userId] = { videos: [], link: channelLink };
                 localStorage.setItem('channels', JSON.stringify(this.state.channels));
                 console.log('Каналы после регистрации:', this.state.channels);
@@ -284,7 +286,7 @@ class VideoManager {
         if (this.userAvatar && this.tg?.initDataUnsafe?.user?.photo_url) {
             this.userAvatar.src = this.tg.initDataUnsafe.user.photo_url;
         } else {
-            this.userAvatar.src = '/images/default-avatar.png'; // Локальный аватар
+            this.userAvatar.src = '/images/default-avatar.png';
         }
         this.initializeTheme();
         this.initializeTooltips();
@@ -299,7 +301,10 @@ class VideoManager {
 
         try {
             console.log('Попытка загрузить видео с сервера...');
-            const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/public-videos');
+            const response = await fetch(`${this.apiBaseUrl}/public-videos`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            });
             console.log('Ответ /api/public-videos:', response.status);
             if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
             const data = await response.json();
@@ -470,7 +475,6 @@ class VideoManager {
         this.state.startY = e.touches[0].clientY;
         this.state.isSwiping = false;
 
-        // Мгновенно вызываем паузу/воспроизведение, если нет удержания или перетаскивания
         if (!this.state.isHolding && !this.state.isDragging) {
             this.toggleVideoPlayback();
         }
@@ -481,7 +485,7 @@ class VideoManager {
         this.state.endY = e.touches[0].clientY;
         const deltaX = this.state.endX - this.state.startX;
         const deltaY = this.state.endY - this.state.startY;
-        const minMovement = 10; // Минимальное движение для свайпа
+        const minMovement = 10;
         if (Math.abs(deltaX) > minMovement || Math.abs(deltaY) > minMovement) {
             this.state.isSwiping = true;
         }
@@ -494,7 +498,6 @@ class VideoManager {
         const swipeThresholdVertical = 50;
         const minMovement = 10;
 
-        // Игнорируем мелкие движения, чтобы не мешать тапу
         if (Math.abs(deltaX) < minMovement && Math.abs(deltaY) < minMovement) {
             return;
         }
@@ -529,7 +532,6 @@ class VideoManager {
         this.state.startY = e.clientY;
         this.state.isSwiping = false;
 
-        // Мгновенно вызываем паузу/воспроизведение, если нет удержания
         if (!this.state.isHolding) {
             this.toggleVideoPlayback();
         }
@@ -949,15 +951,16 @@ class VideoManager {
         formData.append('description', description);
 
         try {
-            const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/upload-video', {
+            const response = await fetch(`${this.apiBaseUrl}/upload-video`, {
                 method: 'POST',
                 body: formData
             });
             console.log('Ответ /api/upload-video:', response.status);
-            const responseText = await response.text();
-            console.log('Тело ответа:', responseText);
-            if (!response.ok) throw new Error(`Ошибка загрузки видео: ${response.status} ${responseText}`);
-            const { url } = JSON.parse(responseText);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Ошибка загрузки видео: ${response.status} ${errorText}`);
+            }
+            const { url, message } = await response.json();
             console.log('Полученный URL:', url);
 
             this.showNotification('Видео успешно опубликовано!');
@@ -969,7 +972,6 @@ class VideoManager {
                 this.uploadPreview.style.display = 'none';
             }
 
-            // Создаём данные для нового видео с описанием
             const newVideoData = this.createEmptyVideoData(this.state.userId);
             newVideoData.description = description;
             this.state.playlist.unshift({ url, data: newVideoData });
@@ -1021,31 +1023,51 @@ class VideoManager {
         return list;
     }
 
-    editVideo(url) {
+    async editVideo(url) {
         const index = this.state.playlist.findIndex(v => v.url === url);
         if (index === -1) return;
         const newDescription = prompt('Введите новое описание:', this.state.playlist[index].data.description);
         if (newDescription !== null) {
-            this.state.playlist[index].data.description = newDescription;
-            this.updateVideoCache(index);
-            const videoItem = document.querySelector(`.video-item [data-url="${url}"]`).parentElement;
-            videoItem.querySelector('span').textContent = newDescription || 'Без описания';
-            this.showNotification('Описание обновлено!');
-            if (this.state.currentIndex === index) this.updateDescription();
+            try {
+                const response = await fetch(`${this.apiBaseUrl}/update-video`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        url,
+                        description: newDescription,
+                        telegram_id: this.state.userId
+                    })
+                });
+                console.log('Ответ /api/update-video:', response.status);
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Ошибка обновления видео: ${response.status} ${errorText}`);
+                }
+                this.state.playlist[index].data.description = newDescription;
+                const videoItem = document.querySelector(`.video-item [data-url="${url}"]`).parentElement;
+                videoItem.querySelector('span').textContent = newDescription || 'Без описания';
+                this.showNotification('Описание обновлено!');
+                if (this.state.currentIndex === index) this.updateDescription();
+                await this.loadInitialVideos(); // Обновляем плейлист
+            } catch (error) {
+                console.error('Ошибка обновления видео:', error);
+                this.showNotification(`Ошибка: ${error.message}`);
+            }
         }
     }
 
     async deleteVideo(url) {
         try {
-            const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/delete-video', {
+            const response = await fetch(`${this.apiBaseUrl}/delete-video`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url, telegram_id: this.state.userId })
             });
             console.log('Ответ /api/delete-video:', response.status);
-            const responseText = await response.text();
-            console.log('Тело ответа:', responseText);
-            if (!response.ok) throw new Error(`Ошибка удаления видео: ${response.status} ${responseText}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Ошибка удаления видео: ${response.status} ${errorText}`);
+            }
             this.showNotification('Видео успешно удалено!');
             const index = this.state.playlist.findIndex(v => v.url === url);
             if (index !== -1) {
@@ -1198,20 +1220,88 @@ class VideoManager {
         localStorage.setItem(`videoData_${url}`, JSON.stringify(cacheData));
 
         try {
-            const response = await fetch('https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/update-video', {
+            const response = await fetch(`${this.apiBaseUrl}/update-video`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(cacheData)
             });
             console.log('Ответ /api/update-video:', response.status);
-            const responseText = await response.text();
-            console.log('Тело ответа:', responseText);
-            if (!response.ok) throw new Error(`Ошибка обновления данных: ${response.status} ${responseText}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Ошибка обновления данных: ${response.status} ${errorText}`);
+            }
             console.log('Данные сохранены на сервере');
         } catch (error) {
             console.error('Ошибка обновления данных:', error);
             this.showNotification('Не удалось сохранить данные!');
         }
+    }
+
+    async downloadCurrentVideo(e) {
+        e.stopPropagation();
+        if (!this.state.playlist || this.state.playlist.length === 0) {
+            console.error('Плейлист пуст, скачивание невозможно');
+            this.showNotification('Нет видео для скачивания!');
+            return;
+        }
+        const videoUrl = this.state.playlist[this.state.currentIndex].url;
+        if (!videoUrl) {
+            console.error('URL видео отсутствует');
+            this.showNotification('Нет видео для скачивания!');
+            return;
+        }
+
+        console.log('Попытка скачать видео:', videoUrl);
+        this.uploadBtn.classList.add('downloading');
+        this.uploadBtn.style.setProperty('--progress', '0%');
+
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/download-video?url=${encodeURIComponent(videoUrl)}`, {
+                method: 'GET'
+            });
+            console.log('Статус ответа:', response.status, response.statusText);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Ошибка загрузки: ${response.status} ${errorText}`);
+            }
+
+            const total = Number(response.headers.get('content-length')) || 0;
+            let loaded = 0;
+            const chunks = [];
+
+            const reader = response.body.getReader();
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value);
+                loaded += value.length;
+                const progress = total ? (loaded / total) * 100 : this.simulateProgress(loaded);
+                console.log('Прогресс:', progress);
+                this.uploadBtn.style.setProperty('--progress', `${progress}%`);
+            }
+
+            const blob = new Blob(chunks, { type: response.headers.get('content-type') || 'video/mp4' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `video_${Date.now()}.mp4`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            this.showNotification('Видео успешно скачано!');
+        } catch (err) {
+            console.error('Ошибка скачивания:', err);
+            this.showNotification(`Не удалось скачать видео: ${err.message}`);
+        } finally {
+            this.uploadBtn.classList.remove('downloading');
+            this.uploadBtn.style.setProperty('--progress', '0%');
+        }
+    }
+
+    simulateProgress(loaded) {
+        return Math.min(100, (loaded / (1024 * 1024)) * 10);
     }
 
     initializeTheme() {
@@ -1370,68 +1460,6 @@ class VideoManager {
                 }
             }, 15000);
         }
-    }
-
-    async downloadCurrentVideo(e) {
-        e.stopPropagation();
-        if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, скачивание невозможно');
-            this.showNotification('Нет видео для скачивания!');
-            return;
-        }
-        const videoUrl = this.state.playlist[this.state.currentIndex].url;
-        if (!videoUrl) {
-            console.error('URL видео отсутствует');
-            this.showNotification('Нет видео для скачивания!');
-            return;
-        }
-
-        console.log('Попытка скачать видео:', videoUrl);
-        this.uploadBtn.classList.add('downloading');
-        this.uploadBtn.style.setProperty('--progress', '0%');
-
-        try {
-            const response = await fetch(`https://handicapped-maudie-tgclips-ca255b32.koyeb.app/api/download-video?url=${encodeURIComponent(videoUrl)}`, { mode: 'cors' });
-            console.log('Статус ответа:', response.status, response.statusText);
-            if (!response.ok) throw new Error(`Ошибка загрузки: ${response.status} ${response.statusText}`);
-
-            const total = Number(response.headers.get('content-length')) || 0;
-            let loaded = 0;
-            const chunks = [];
-
-            const reader = response.body.getReader();
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                chunks.push(value);
-                loaded += value.length;
-                const progress = total ? (loaded / total) * 100 : this.simulateProgress(loaded);
-                console.log('Прогресс:', progress);
-                this.uploadBtn.style.setProperty('--progress', `${progress}%`);
-            }
-
-            const blob = new Blob(chunks, { type: response.headers.get('content-type') || 'video/mp4' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `video_${Date.now()}.mp4`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-
-            this.showNotification('Видео успешно скачано!');
-        } catch (err) {
-            console.error('Ошибка скачивания:', err);
-            this.showNotification(`Не удалось скачать видео: ${err.message}`);
-        } finally {
-            this.uploadBtn.classList.remove('downloading');
-            this.uploadBtn.style.setProperty('--progress', '0%');
-        }
-    }
-
-    simulateProgress(loaded) {
-        return Math.min(100, (loaded / (1024 * 1024)) * 10);
     }
 
     startDragging(e) {
