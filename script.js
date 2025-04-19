@@ -23,7 +23,7 @@ class VideoManager {
             startY: 0,
             endX: 0,
             endY: 0,
-            isUserInitiated: false // Новый флаг для отслеживания взаимодействия пользователя
+            isUserInitiated: false
         };
         this.tg = window.Telegram?.WebApp;
         this.MAX_PRELOAD_SIZE = 3;
@@ -32,25 +32,25 @@ class VideoManager {
         if (this.tg) {
             this.tg.ready();
             this.tg.expand();
-            console.log('Telegram Web App инициализирован:', this.tg.initDataUnsafe);
-            console.log('Версия Telegram Web App:', this.tg.version);
+            console.log('Telegram Web App initialized:', this.tg.initDataUnsafe);
+            console.log('Telegram Web App version:', this.tg.version);
         } else {
-            console.warn('Telegram Web App SDK не загружен. Работа в режиме браузера.');
+            console.warn('Telegram Web App SDK not loaded. Running in browser mode.');
         }
     }
 
     async init() {
-        console.log('Скрипт обновлён, версия 15');
+        console.log('Script updated, version 16');
         if (this.tg?.initDataUnsafe?.user) {
             this.state.userId = String(this.tg.initDataUnsafe.user.id);
-            console.log('Telegram инициализирован, userId:', this.state.userId);
+            console.log('Telegram initialized, userId:', this.state.userId);
         } else {
             this.state.userId = 'testUser_' + Date.now();
-            console.log('Тестовый userId:', this.state.userId);
+            console.log('Test userId:', this.state.userId);
         }
 
         await this.loadChannels();
-        console.log('Зарегистрированные каналы:', this.state.channels);
+        console.log('Registered channels:', this.state.channels);
 
         this.bindElements();
         this.bindEvents();
@@ -61,22 +61,21 @@ class VideoManager {
     async loadChannels() {
         try {
             const response = await this.retryFetch(`${SERVER_URL}/api/channels`, { method: 'GET' });
-            console.log('Ответ /api/channels:', response.status);
-            if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
+            console.log('Response /api/channels:', response.status);
+            if (!response.ok) throw new Error(`Server error: ${response.status}`);
             const channels = await response.json();
             this.state.channels = channels.reduce((acc, channel) => {
                 acc[channel.user_id] = { link: channel.channel_name, videos: [] };
                 return acc;
             }, {});
-            console.log('Каналы загружены из Supabase:', this.state.channels);
+            console.log('Channels loaded from Supabase:', this.state.channels);
             localStorage.setItem('cachedChannels', JSON.stringify(this.state.channels));
         } catch (error) {
-            console.error('Ошибка загрузки каналов:', error.message, error.stack);
-            this.showNotification(`Не удалось загрузить каналы: ${error.message}${this.tg ? '. Попробуйте обновить страницу.' : ''}`);
-            // Fallback: использовать кэшированные каналы или пустой объект
+            console.error('Error loading channels:', error.message, error.stack);
+            this.showNotification(`Failed to load channels: ${error.message}${this.tg ? '. Try refreshing.' : ''}`);
             const cachedChannels = localStorage.getItem('cachedChannels');
             this.state.channels = cachedChannels ? JSON.parse(cachedChannels) : {};
-            console.log('Используются кэшированные каналы:', this.state.channels);
+            console.log('Using cached channels:', this.state.channels);
         }
     }
 
@@ -124,6 +123,7 @@ class VideoManager {
         this.shareTelegram = document.getElementById('shareTelegram');
         this.copyLink = document.getElementById('copyLink');
         this.closeShare = document.getElementById('closeShare');
+        this.affiliateLinkBtn = document.getElementById('affiliateLinkBtn');
         this.videoUpload = document.createElement('input');
         this.videoUpload.type = 'file';
         this.videoUpload.accept = 'video/mp4,video/quicktime,video/webm';
@@ -135,14 +135,15 @@ class VideoManager {
         const bindButton = (btn, handler, name) => {
             if (btn) {
                 btn.addEventListener('click', handler);
-                console.log(`${name} привязан`);
+                console.log(`${name} bound`);
             } else {
-                console.warn(`${name} не найден`);
+                console.warn(`${name} not found`);
             }
         };
 
         bindButton(this.authBtn, () => this.handleAuth(), '#authBtn');
         bindButton(this.registerChannelBtn, () => this.registerChannel(), '#registerChannelBtn');
+        bindButton(this.affiliateLinkBtn, () => this.handleAffiliateClick(), '#affiliateLinkBtn');
 
         this.reactionButtons.forEach(btn => btn.addEventListener('click', (e) => this.handleReaction(btn.dataset.type, e)));
         bindButton(this.plusBtn, (e) => this.toggleSubmenu(e), '.plus-btn');
@@ -154,7 +155,6 @@ class VideoManager {
             this.video.addEventListener('pause', () => this.handlePause());
             this.video.addEventListener('ended', () => this.handleEnded());
             this.video.addEventListener('timeupdate', () => this.handleTimeUpdate());
-            // Добавляем обработчик клика для воспроизведения
             this.video.addEventListener('click', () => this.handleVideoClick());
         }
         bindButton(this.progressRange, (e) => this.handleProgressInput(e), '#progressRange');
@@ -223,18 +223,19 @@ class VideoManager {
         if (this.video.paused) {
             this.video.play().catch(err => {
                 console.error('Play error:', err.message, err.stack);
-                this.showNotification(`Не удалось воспроизвести видео: ${err.message}. Кликните по видео для воспроизведения.`);
+                this.showNotification(`Failed to play video: ${err.message}. Click the video to play.`);
             });
         }
     }
 
     handleAuth() {
+        console.log('Handling auth click');
         if (this.tg?.initDataUnsafe?.user) {
             this.state.userId = String(this.tg.initDataUnsafe.user.id);
-            this.showNotification('Вход успешен: ' + this.state.userId);
+            this.showNotification('Login successful: ' + this.state.userId);
         } else {
             this.state.userId = 'browserTestUser_' + Date.now();
-            this.showNotification('Имитация входа: ' + this.state.userId);
+            this.showNotification('Simulated login: ' + this.state.userId);
         }
         this.showPlayer();
     }
@@ -245,23 +246,23 @@ class VideoManager {
             this.playerContainer.style.display = 'flex';
             this.initializePlayer();
         } else {
-            console.error('Ошибка: authScreen или playerContainer не найдены');
+            console.error('Error: authScreen or playerContainer not found');
         }
     }
 
     bindUserAvatar() {
         if (!this.userAvatar) {
-            console.error('Элемент #userAvatar не найден!');
+            console.error('Element #userAvatar not found!');
             return;
         }
 
         this.userAvatar.addEventListener('click', async (e) => {
             e.stopPropagation();
-            console.log('Клик по аватару, userId:', this.state.userId);
+            console.log('Avatar click, userId:', this.state.userId);
             if (!this.state.isHolding) {
                 const channel = this.state.channels[this.state.userId];
                 if (channel?.link) {
-                    console.log('Переход на канал:', channel.link);
+                    console.log('Navigating to channel:', channel.link);
                     try {
                         if (this.tg && this.tg.openTelegramLink) {
                             this.tg.openTelegramLink(channel.link);
@@ -269,11 +270,11 @@ class VideoManager {
                             window.open(channel.link, '_blank');
                         }
                     } catch (error) {
-                        console.error('Ошибка перехода на канал:', error.message, error.stack);
-                        this.showNotification('Не удалось открыть канал!');
+                        console.error('Error navigating to channel:', error.message, error.stack);
+                        this.showNotification('Failed to open channel!');
                     }
                 } else {
-                    this.showNotification('Канал не зарегистрирован. Зарегистрируйте его!');
+                    this.showNotification('Channel not registered. Register it now!');
                     await this.registerChannel();
                 }
             }
@@ -313,11 +314,11 @@ class VideoManager {
 
     async registerChannel() {
         if (!this.state.userId) {
-            this.showNotification('Пожалуйста, войдите через Telegram.');
+            this.showNotification('Please log in via Telegram.');
             return;
         }
-        const channelLink = prompt('Введите ссылку на ваш Telegram-канал (например, https://t.me/yourchannel):');
-        console.log('Введённая ссылка:', channelLink);
+        const channelLink = prompt('Enter your Telegram channel link (e.g., https://t.me/yourchannel):');
+        console.log('Entered link:', channelLink);
         if (channelLink && channelLink.match(/^https:\/\/t\.me\/[a-zA-Z0-9_]+$/)) {
             try {
                 const response = await this.retryFetch(`${SERVER_URL}/api/register-channel`, {
@@ -325,19 +326,19 @@ class VideoManager {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ userId: this.state.userId, channelName: channelLink })
                 });
-                console.log('Ответ /api/register-channel:', response.status);
-                if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
+                console.log('Response /api/register-channel:', response.status);
+                if (!response.ok) throw new Error(`Server error: ${response.status}`);
                 this.state.channels[this.state.userId] = { link: channelLink, videos: [] };
-                console.log('Каналы после регистрации:', this.state.channels);
+                console.log('Channels after registration:', this.state.channels);
                 localStorage.setItem('cachedChannels', JSON.stringify(this.state.channels));
-                this.showNotification('Канал успешно зарегистрирован!');
+                this.showNotification('Channel successfully registered!');
                 this.showPlayer();
             } catch (error) {
-                console.error('Ошибка регистрации канала:', error.message, error.stack);
-                this.showNotification(`Ошибка при регистрации канала: ${error.message}${this.tg ? '. Попробуйте снова.' : ''}`);
+                console.error('Error registering channel:', error.message, error.stack);
+                this.showNotification(`Error registering channel: ${error.message}${this.tg ? '. Try again.' : ''}`);
             }
         } else {
-            this.showNotification('Введите корректную ссылку на Telegram-канал.');
+            this.showNotification('Enter a valid Telegram channel link.');
         }
     }
 
@@ -357,15 +358,15 @@ class VideoManager {
         ];
 
         try {
-            console.log('Попытка загрузить видео с сервера...');
+            console.log('Attempting to load videos from server...');
             const response = await this.retryFetch(`${SERVER_URL}/api/public-videos`, { method: 'GET' });
-            console.log('Ответ /api/public-videos:', response.status);
-            if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
+            console.log('Response /api/public-videos:', response.status);
+            if (!response.ok) throw new Error(`Server error: ${response.status}`);
             const data = await response.json();
-            console.log('Полученные данные:', data);
+            console.log('Received data:', data);
 
             if (!data || !Array.isArray(data) || data.length === 0) {
-                console.warn('Сервер вернул пустой или некорректный ответ, используем стоковые видео');
+                console.warn('Server returned empty or invalid response, using stock videos');
                 this.state.playlist = stockVideos;
             } else {
                 this.state.playlist = data.map(video => ({
@@ -384,31 +385,33 @@ class VideoManager {
                         authorId: video.author_id,
                         lastPosition: video.last_position || 0,
                         chatMessages: video.chat_messages || [],
-                        description: video.description || ''
+                        description: video.description || '',
+                        affiliateLink: video.affiliate_link || '',
+                        affiliateClicks: video.affiliate_clicks || 0
                     }
                 }));
             }
         } catch (error) {
-            console.error('Ошибка загрузки видео с сервера:', error.message, error.stack);
-            this.showNotification(`Не удалось загрузить видео с сервера: ${error.message}${this.tg ? '. Используем локальные видео.' : ''}`);
+            console.error('Error loading videos from server:', error.message, error.stack);
+            this.showNotification(`Failed to load videos: ${error.message}${this.tg ? '. Using local videos.' : ''}`);
             const cachedVideos = localStorage.getItem('cachedVideos');
             if (cachedVideos) {
                 this.state.playlist = JSON.parse(cachedVideos);
-                console.log('Загружены кэшированные видео:', this.state.playlist);
+                console.log('Loaded cached videos:', this.state.playlist);
             } else {
                 this.state.playlist = stockVideos;
-                console.log('Используем стоковые видео:', this.state.playlist);
+                console.log('Using stock videos:', this.state.playlist);
             }
         }
 
         localStorage.setItem('cachedVideos', JSON.stringify(this.state.playlist));
-        console.log('Итоговый плейлист:', this.state.playlist);
+        console.log('Final playlist:', this.state.playlist);
         if (this.state.playlist.length > 0) {
             this.state.currentIndex = 0;
             this.loadVideo();
         } else {
-            console.error('Плейлист пуст после всех попыток!');
-            this.showNotification('Не удалось загрузить видео!');
+            console.error('Playlist empty after all attempts!');
+            this.showNotification('No videos available!');
         }
     }
 
@@ -427,7 +430,9 @@ class VideoManager {
             authorId,
             lastPosition: 0,
             chatMessages: [],
-            description: ''
+            description: '',
+            affiliateLink: '',
+            affiliateClicks: 0
         };
     }
 
@@ -443,13 +448,12 @@ class VideoManager {
             this.updateVideoCache(this.state.currentIndex);
             this.updateRating();
         }
-        // Не запускаем play() автоматически, ждём клика пользователя
-        this.showNotification('Кликните по видео, чтобы начать воспроизведение.');
+        this.showNotification('Click the video to start playback.');
     }
 
     handlePlay() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, обработка воспроизведения невозможна');
+            console.error('Playlist empty, playback handling impossible');
             return;
         }
         const videoData = this.state.playlist[this.state.currentIndex].data;
@@ -466,7 +470,7 @@ class VideoManager {
 
     handlePause() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, обработка паузы невозможна');
+            console.error('Playlist empty, pause handling impossible');
             return;
         }
         if (!this.state.isProgressBarActivated) {
@@ -482,7 +486,7 @@ class VideoManager {
 
     handleEnded() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, обработка окончания невозможна');
+            console.error('Playlist empty, end handling impossible');
             return;
         }
         const videoData = this.state.playlist[this.state.currentIndex].data;
@@ -494,7 +498,7 @@ class VideoManager {
 
     handleTimeUpdate() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, обновление времени невозможно');
+            console.error('Playlist empty, time update impossible');
             return;
         }
         const videoData = this.state.playlist[this.state.currentIndex].data;
@@ -512,7 +516,7 @@ class VideoManager {
 
     handleProgressInput(e) {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, обработка прогресса невозможна');
+            console.error('Playlist empty, progress handling impossible');
             return;
         }
         this.video.currentTime = e.target.value;
@@ -567,11 +571,11 @@ class VideoManager {
         }
 
         if (!this.state.userId) {
-            this.showNotification('Войдите, чтобы ставить реакции');
+            this.showNotification('Log in to react');
             return;
         }
 
-        console.log('Свайп: deltaX=', deltaX, 'deltaY=', deltaY);
+        console.log('Swipe: deltaX=', deltaX, 'deltaY=', deltaY);
         if (Math.abs(deltaX) > swipeThresholdHorizontal && Math.abs(deltaX) > Math.abs(deltaY)) {
             if (deltaX > 0) this.playNextVideo();
             else this.playPreviousVideo();
@@ -626,11 +630,11 @@ class VideoManager {
         }
 
         if (!this.state.userId) {
-            this.showNotification('Войдите, чтобы ставить реакции');
+            this.showNotification('Log in to react');
             return;
         }
 
-        console.log('Свайп мышью: deltaX=', deltaX, 'deltaY=', deltaY);
+        console.log('Mouse swipe: deltaX=', deltaX, 'deltaY=', deltaY);
         if (Math.abs(deltaX) > swipeThresholdHorizontal && Math.abs(deltaX) > Math.abs(deltaY)) {
             if (deltaX > 0) this.playNextVideo();
             else this.playPreviousVideo();
@@ -660,35 +664,35 @@ class VideoManager {
 
     playNextVideo() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, переход к следующему видео невозможен');
+            console.error('Playlist empty, cannot go to next video');
             return;
         }
         this.recommendNextVideo();
         this.loadVideo('left');
         this.state.hasViewed = false;
-        this.state.isUserInitiated = false; // Сбрасываем флаг
+        this.state.isUserInitiated = false;
     }
 
     playPreviousVideo() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, переход к предыдущему видео невозможен');
+            console.error('Playlist empty, cannot go to previous video');
             return;
         }
         this.state.currentIndex = (this.state.currentIndex - 1 + this.state.playlist.length) % this.state.playlist.length;
         this.loadVideo('right');
         this.state.hasViewed = false;
-        this.state.isUserInitiated = false; // Сбрасываем флаг
+        this.state.isUserInitiated = false;
     }
 
     loadVideo(direction = 'left') {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, загрузка видео невозможна');
-            this.showNotification('Нет видео для воспроизведения!');
+            console.error('Playlist empty, cannot load video');
+            this.showNotification('No videos to play!');
             return;
         }
 
         if (this.state.currentIndex < 0 || this.state.currentIndex >= this.state.playlist.length) {
-            console.warn('Некорректный индекс, сбрасываем на 0');
+            console.warn('Invalid index, resetting to 0');
             this.state.currentIndex = 0;
         }
 
@@ -702,7 +706,7 @@ class VideoManager {
             this.video.load();
             const timeout = setTimeout(() => {
                 if (!this.video.readyState) {
-                    this.showNotification('Ошибка загрузки видео!');
+                    this.showNotification('Video load error!');
                     this.playNextVideo();
                 }
             }, 5000);
@@ -714,14 +718,13 @@ class VideoManager {
                 if (lastPosition > 0 && lastPosition < this.video.duration) {
                     this.video.currentTime = lastPosition;
                 }
-                // Запускаем воспроизведение только если пользователь инициировал
                 if (this.state.isUserInitiated) {
                     this.video.play().catch(err => {
                         console.error('Play error:', err.message, err.stack);
-                        this.showNotification(`Не удалось воспроизвести видео: ${err.message}. Кликните по видео для воспроизведения.`);
+                        this.showNotification(`Failed to play video: ${err.message}. Click the video to play.`);
                     });
                 } else {
-                    this.showNotification('Кликните по видео, чтобы начать воспроизведение.');
+                    this.showNotification('Click the video to start playback.');
                 }
             }, { once: true });
             this.updateCounters();
@@ -734,7 +737,7 @@ class VideoManager {
 
     async addComment() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, добавление комментария невозможно');
+            console.error('Playlist empty, cannot add comment');
             return;
         }
         const videoData = this.state.playlist[this.state.currentIndex].data;
@@ -748,7 +751,7 @@ class VideoManager {
             videoData.comments.push(newComment);
             this.commentInput.value = '';
             this.commentInput.dataset.replyTo = '';
-            this.commentInput.placeholder = 'Напишите комментарий...';
+            this.commentInput.placeholder = 'Write a comment...';
             this.updateComments();
             this.updateCounters();
             await this.updateVideoCache(this.state.currentIndex);
@@ -757,7 +760,7 @@ class VideoManager {
 
     updateComments() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, обновление комментариев невозможно');
+            console.error('Playlist empty, cannot update comments');
             return;
         }
         const videoData = this.state.playlist[this.state.currentIndex].data;
@@ -776,10 +779,10 @@ class VideoManager {
                 <img src="${userPhoto}" alt="User Avatar" class="comment-avatar" data-user-id="${comment.userId}">
                 <div class="comment-content">
                     <span class="comment-username">${username}</span>
-                    <div class="comment-text">${this.sanitize(comment.text)}${comment.replyTo !== null && videoData.comments[comment.replyTo] ? `<blockquote>Цитата: ${this.sanitize(videoData.comments[comment.replyTo].text)}</blockquote>` : ''}</div>
+                    <div class="comment-text">${this.sanitize(comment.text)}${comment.replyTo !== null && videoData.comments[comment.replyTo] ? `<blockquote>Quote: ${this.sanitize(videoData.comments[comment.replyTo].text)}</blockquote>` : ''}</div>
                 </div>
-                <button class="reply-btn" data-index="${idx}">Ответить</button>
-                ${isOwnComment ? `<button class="delete-comment-btn" data-index="${idx}">Удалить</button>` : ''}
+                <button class="reply-btn" data-index="${idx}">Reply</button>
+                ${isOwnComment ? `<button class="delete-comment-btn" data-index="${idx}">Delete</button>` : ''}
             `;
             this.commentsList.appendChild(commentEl);
             commentEl.querySelector('.reply-btn').addEventListener('click', () => this.replyToComment(idx));
@@ -799,29 +802,29 @@ class VideoManager {
 
     replyToComment(index) {
         this.commentInput.dataset.replyTo = index;
-        this.commentInput.placeholder = `Ответ на: "${this.state.playlist[this.state.currentIndex].data.comments[index].text.slice(0, 20)}..."`;
+        this.commentInput.placeholder = `Replying to: "${this.state.playlist[this.state.currentIndex].data.comments[index].text.slice(0, 20)}..."`;
         this.commentInput.focus();
     }
 
     async deleteComment(index) {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, удаление комментария невозможно');
+            console.error('Playlist empty, cannot delete comment');
             return;
         }
-        if (confirm('Удалить этот комментарий?')) {
+        if (confirm('Delete this comment?')) {
             this.state.playlist[this.state.currentIndex].data.comments.splice(index, 1);
             this.updateComments();
             this.updateCounters();
             await this.updateVideoCache(this.state.currentIndex);
-            this.showNotification('Комментарий удалён');
+            this.showNotification('Comment deleted');
         }
     }
 
     async handleAvatarClick(userId) {
-        console.log('Клик по аватару комментария, userId:', userId);
+        console.log('Comment avatar click, userId:', userId);
         const channel = this.state.channels[userId];
         if (channel?.link) {
-            console.log('Переход на канал:', channel.link);
+            console.log('Navigating to channel:', channel.link);
             try {
                 if (this.tg && this.tg.openTelegramLink) {
                     this.tg.openTelegramLink(channel.link);
@@ -829,17 +832,17 @@ class VideoManager {
                     window.open(channel.link, '_blank');
                 }
             } catch (error) {
-                console.error('Ошибка перехода на канал:', error.message, error.stack);
-                this.showNotification('Не удалось открыть канал!');
+                console.error('Error navigating to channel:', error.message, error.stack);
+                this.showNotification('Failed to open channel!');
             }
         } else {
-            this.showNotification('Канал не зарегистрирован');
+            this.showNotification('Channel not registered');
         }
     }
 
     updateDescription() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, обновление описания невозможно');
+            console.error('Playlist empty, cannot update description');
             return;
         }
         let descriptionEl = document.getElementById('videoDescriptionDisplay');
@@ -849,14 +852,27 @@ class VideoManager {
             descriptionEl.style.cssText = 'margin-top: 10px; color: var(--text-color);';
             document.querySelector('.video-wrapper')?.insertAdjacentElement('afterend', descriptionEl);
         }
-        const description = this.state.playlist[this.state.currentIndex].data.description || 'Описание отсутствует';
-        descriptionEl.textContent = description;
-        descriptionEl.style.display = description !== 'Описание отсутствует' ? 'block' : 'none';
+        const videoData = this.state.playlist[this.state.currentIndex].data;
+        const description = videoData.description || 'No description';
+        const affiliateLink = videoData.affiliateLink || '';
+        descriptionEl.innerHTML = `${this.sanitize(description)}${affiliateLink ? ` <a href="${affiliateLink}" id="affiliateLinkBtn" target="_blank">Check this offer!</a>` : ''}`;
+        descriptionEl.style.display = description !== 'No description' || affiliateLink ? 'block' : 'none';
+    }
+
+    async handleAffiliateClick() {
+        if (!this.state.playlist || this.state.playlist.length === 0) {
+            console.error('Playlist empty, cannot handle affiliate click');
+            return;
+        }
+        const videoData = this.state.playlist[this.state.currentIndex].data;
+        videoData.affiliateClicks = (videoData.affiliateClicks || 0) + 1;
+        await this.updateVideoCache(this.state.currentIndex);
+        console.log('Affiliate link clicked:', videoData.affiliateLink);
     }
 
     updateChat() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, обновление чата невозможно');
+            console.error('Playlist empty, cannot update chat');
             return;
         }
         const videoData = this.state.playlist[this.state.currentIndex].data;
@@ -872,7 +888,7 @@ class VideoManager {
 
     async sendChat() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, отправка сообщения невозможна');
+            console.error('Playlist empty, cannot send chat message');
             return;
         }
         const videoData = this.state.playlist[this.state.currentIndex].data;
@@ -883,7 +899,7 @@ class VideoManager {
             this.updateChat();
             await this.updateVideoCache(this.state.currentIndex);
             setTimeout(() => {
-                videoData.chatMessages.push({ sender: videoData.authorId, text: "Спасибо за сообщение!" });
+                videoData.chatMessages.push({ sender: videoData.authorId, text: "Thanks for your message!" });
                 this.updateChat();
                 this.updateVideoCache(this.state.currentIndex);
             }, 1000);
@@ -899,18 +915,18 @@ class VideoManager {
 
     shareViaTelegram() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, шаринг невозможен');
+            console.error('Playlist empty, cannot share');
             return;
         }
         const videoUrl = this.state.playlist[this.state.currentIndex].url;
-        const description = this.state.playlist[this.state.currentIndex].data.description || 'Смотри это крутое видео!';
+        const description = this.state.playlist[this.state.currentIndex].data.description || 'Check out this cool video!';
         const text = `${description}\n${videoUrl}`;
         if (this.tg?.openTelegramLink) {
             this.tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(videoUrl)}&text=${encodeURIComponent(description)}`);
         } else {
             navigator.clipboard.writeText(text)
-                .then(() => this.showNotification('Ссылка скопирована! Вставьте её в Telegram.'))
-                .catch(err => this.showNotification('Не удалось скопировать ссылку'));
+                .then(() => this.showNotification('Link copied! Paste it in Telegram.'))
+                .catch(err => this.showNotification('Failed to copy link'));
         }
         this.shareModal.classList.remove('visible');
         this.state.playlist[this.state.currentIndex].data.shares++;
@@ -920,38 +936,38 @@ class VideoManager {
 
     copyVideoLink() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, копирование ссылки невозможно');
+            console.error('Playlist empty, cannot copy link');
             return;
         }
         const videoUrl = this.state.playlist[this.state.currentIndex].url;
         navigator.clipboard.writeText(videoUrl)
             .then(() => {
-                this.showNotification('Ссылка скопирована!');
+                this.showNotification('Link copied!');
                 this.shareModal.classList.remove('visible');
             })
-            .catch(err => this.showNotification('Не удалось скопировать ссылку'));
+            .catch(err => this.showNotification('Failed to copy link'));
     }
 
     async handleVideoUpload(e) {
         this.state.uploadedFile = e.target.files[0];
         if (!this.state.uploadedFile) {
-            console.error('Файл не выбран');
-            this.showNotification('Выберите видео для загрузки!');
+            console.error('No file selected');
+            this.showNotification('Select a video to upload!');
             return;
         }
 
         const maxSize = 100 * 1024 * 1024;
         const validTypes = ['video/mp4', 'video/quicktime', 'video/webm'];
 
-        console.log('Выбранный файл:', this.state.uploadedFile.name, this.state.uploadedFile.size, this.state.uploadedFile.type);
+        console.log('Selected file:', this.state.uploadedFile.name, this.state.uploadedFile.size, this.state.uploadedFile.type);
         if (this.state.uploadedFile.size > maxSize) {
-            this.showNotification('Файл слишком большой! Максимум 100 МБ.');
+            this.showNotification('File too large! Max 100 MB.');
             this.state.uploadedFile = null;
             return;
         }
 
         if (!validTypes.includes(this.state.uploadedFile.type)) {
-            this.showNotification('Неподдерживаемый формат! Используйте MP4, MOV или WebM.');
+            this.showNotification('Unsupported format! Use MP4, MOV, or WebM.');
             this.state.uploadedFile = null;
             return;
         }
@@ -980,29 +996,31 @@ class VideoManager {
 
     async publishVideo() {
         if (!this.state.uploadedFile) {
-            console.error('Файл для загрузки отсутствует');
-            this.showNotification('Выберите видео для загрузки!');
+            console.error('No file to upload');
+            this.showNotification('Select a video to upload!');
             return;
         }
 
         const file = this.state.uploadedFile;
         const description = document.getElementById('videoDescription')?.value || '';
-        console.log('Загрузка файла:', file.name, file.type, file.size);
-        console.log('userId:', this.state.userId, 'Описание:', description);
+        const affiliateLink = document.getElementById('affiliateLinkInput')?.value || '';
+        console.log('Uploading file:', file.name, file.type, file.size);
+        console.log('userId:', this.state.userId, 'Description:', description, 'Affiliate Link:', affiliateLink);
 
         const formData = new FormData();
         formData.append('video', file);
         formData.append('userId', this.state.userId);
         formData.append('description', description);
+        formData.append('affiliateLink', affiliateLink);
 
         try {
             const response = await this.retryFetch(`${SERVER_URL}/api/upload-video`, { method: 'POST', body: formData });
-            console.log('Ответ /api/upload-video:', response.status);
-            if (!response.ok) throw new Error(`Ошибка загрузки видео: ${response.status}`);
+            console.log('Response /api/upload-video:', response.status);
+            if (!response.ok) throw new Error(`Video upload error: ${response.status}`);
             const { video } = await response.json();
-            console.log('Полученный URL:', video.url);
+            console.log('Received URL:', video.url);
 
-            this.showNotification('Видео успешно опубликовано!');
+            this.showNotification('Video successfully published!');
             this.uploadModal.classList.remove('visible');
             this.state.uploadedFile = null;
             if (this.uploadPreview.src) {
@@ -1013,13 +1031,14 @@ class VideoManager {
 
             const newVideoData = this.createEmptyVideoData(this.state.userId);
             newVideoData.description = description;
+            newVideoData.affiliateLink = affiliateLink;
             this.state.playlist.unshift({ url: video.url, data: newVideoData });
             this.state.currentIndex = 0;
             this.loadVideo();
             this.addVideoToManagementList(video.url, description);
         } catch (error) {
-            console.error('Ошибка публикации видео:', error.message, error.stack);
-            this.showNotification(`Ошибка: ${error.message}${this.tg ? '. Попробуйте снова.' : ''}`);
+            console.error('Error publishing video:', error.message, error.stack);
+            this.showNotification(`Error: ${error.message}${this.tg ? '. Try again.' : ''}`);
         }
     }
 
@@ -1039,9 +1058,9 @@ class VideoManager {
         const videoItem = document.createElement('div');
         videoItem.className = 'video-item';
         videoItem.innerHTML = `
-            <span>${description || 'Без описания'}</span>
-            <button class="edit-btn" data-url="${url}">Редактировать</button>
-            <button class="delete-btn" data-url="${url}">Удалить</button>
+            <span>${description || 'No description'}</span>
+            <button class="edit-btn" data-url="${url}">Edit</button>
+            <button class="delete-btn" data-url="${url}">Delete</button>
         `;
         managementList.appendChild(videoItem);
 
@@ -1065,13 +1084,15 @@ class VideoManager {
     editVideo(url) {
         const index = this.state.playlist.findIndex(v => v.url === url);
         if (index === -1) return;
-        const newDescription = prompt('Введите новое описание:', this.state.playlist[index].data.description);
+        const newDescription = prompt('Enter new description:', this.state.playlist[index].data.description);
+        const newAffiliateLink = prompt('Enter new affiliate link (optional):', this.state.playlist[index].data.affiliateLink);
         if (newDescription !== null) {
             this.state.playlist[index].data.description = newDescription;
+            this.state.playlist[index].data.affiliateLink = newAffiliateLink || this.state.playlist[index].data.affiliateLink;
             this.updateVideoCache(index);
             const videoItem = document.querySelector(`.video-item [data-url="${url}"]`).parentElement;
-            videoItem.querySelector('span').textContent = newDescription || 'Без описания';
-            this.showNotification('Описание обновлено!');
+            videoItem.querySelector('span').textContent = newDescription || 'No description';
+            this.showNotification('Description updated!');
             if (this.state.currentIndex === index) this.updateDescription();
         }
     }
@@ -1083,9 +1104,9 @@ class VideoManager {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url })
             });
-            console.log('Ответ /api/delete-video:', response.status);
-            if (!response.ok) throw new Error(`Ошибка удаления видео: ${response.status}`);
-            this.showNotification('Видео успешно удалено!');
+            console.log('Response /api/delete-video:', response.status);
+            if (!response.ok) throw new Error(`Video deletion error: ${response.status}`);
+            this.showNotification('Video successfully deleted!');
             const index = this.state.playlist.findIndex(v => v.url === url);
             if (index !== -1) {
                 this.state.playlist.splice(index, 1);
@@ -1097,8 +1118,8 @@ class VideoManager {
                 }
             }
         } catch (error) {
-            console.error('Ошибка удаления видео:', error.message, error.stack);
-            this.showNotification(`Ошибка: ${error.message}${this.tg ? '. Попробуйте снова.' : ''}`);
+            console.error('Error deleting video:', error.message, error.stack);
+            this.showNotification(`Error: ${error.message}${this.tg ? '. Try again.' : ''}`);
         }
     }
 
@@ -1116,7 +1137,7 @@ class VideoManager {
 
     updateCounters() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, обновление счётчиков невозможно');
+            console.error('Playlist empty, cannot update counters');
             return;
         }
         const videoData = this.state.playlist[this.state.currentIndex].data;
@@ -1132,14 +1153,15 @@ class VideoManager {
         const avgViewTimePerView = videoData.viewTime / (videoData.views.size || 1);
         let viewTimeRatio = avgViewTimePerView / duration;
         if (viewTimeRatio > 1) viewTimeRatio = 1 + (videoData.replays / (videoData.views.size || 1));
-        const rawScore = (videoData.likes * 5.0) + (videoData.comments.length * 10.0) + (videoData.shares * 15.0) + (videoData.viewTime * 0.1) + (videoData.replays * 20.0) * (1 + viewTimeRatio);
+        const rawScore = (videoData.likes * 5.0) + (videoData.comments.length * 10.0) + (videoData.shares * 15.0) + 
+                        (videoData.viewTime * 0.1) + (videoData.replays * 20.0) + (videoData.affiliateClicks * 10.0) * (1 + viewTimeRatio);
         const maxPossibleScore = 50;
         return Math.max(0, Math.min(5, (rawScore / maxPossibleScore) * 5));
     }
 
     updateRating() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, обновление рейтинга невозможно');
+            console.error('Playlist empty, cannot update rating');
             return;
         }
         const videoData = this.state.playlist[this.state.currentIndex].data;
@@ -1153,7 +1175,7 @@ class VideoManager {
 
     recommendNextVideo() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, рекомендации невозможны');
+            console.error('Playlist empty, cannot recommend');
             this.state.currentIndex = 0;
             return;
         }
@@ -1164,7 +1186,7 @@ class VideoManager {
         }));
 
         if (scores.length === 0) {
-            console.warn('Нет видео для рекомендаций, сбрасываем индекс');
+            console.warn('No videos for recommendation, resetting index');
             this.state.currentIndex = 0;
             return;
         }
@@ -1176,7 +1198,7 @@ class VideoManager {
 
     preloadNextVideo() {
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, предзагрузка невозможна');
+            console.error('Playlist empty, cannot preload');
             return;
         }
         this.cleanPreloadedVideos();
@@ -1212,13 +1234,12 @@ class VideoManager {
 
     async updateVideoCache(index) {
         if (!this.state.playlist || this.state.playlist.length === 0 || index < 0 || index >= this.state.playlist.length) {
-            console.error('Плейлист пуст или индекс некорректен, кэширование невозможно');
+            console.error('Playlist empty or invalid index, cannot cache');
             return;
         }
         const videoData = this.state.playlist[index].data;
         const url = this.state.playlist[index].url;
 
-        // Ограничиваем размер comments и chatMessages
         const maxComments = 100;
         const maxMessages = 50;
         const trimmedComments = videoData.comments.slice(-maxComments);
@@ -1234,7 +1255,8 @@ class VideoManager {
             view_time: videoData.viewTime,
             replays: videoData.replays,
             last_position: videoData.lastPosition,
-            chat_messages: trimmedChatMessages
+            chat_messages: trimmedChatMessages,
+            affiliate_clicks: videoData.affiliateClicks
         };
         localStorage.setItem(`videoData_${url}`, JSON.stringify(cacheData));
 
@@ -1246,12 +1268,12 @@ class VideoManager {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(cacheData)
                     });
-                    console.log('Ответ /api/update-video:', response.status);
-                    if (!response.ok) throw new Error(`Ошибка обновления данных: ${response.status}`);
-                    console.log('Данные сохранены на сервере');
+                    console.log('Response /api/update-video:', response.status);
+                    if (!response.ok) throw new Error(`Data update error: ${response.status}`);
+                    console.log('Data saved to server');
                 } catch (error) {
-                    console.error('Ошибка обновления данных:', error.message, error.stack);
-                    this.showNotification(`Не удалось сохранить данные: ${error.message}${this.tg ? '. Попробуйте снова.' : ''}`);
+                    console.error('Error updating data:', error.message, error.stack);
+                    this.showNotification(`Failed to save data: ${error.message}${this.tg ? '. Try again.' : ''}`);
                 } finally {
                     this.updateVideoCache.debounceTimer = null;
                 }
@@ -1295,7 +1317,7 @@ class VideoManager {
     }
 
     showNotification(message) {
-        console.error('Notification:', message);
+        console.log('Notification:', message);
         const notification = document.createElement('div');
         notification.style.cssText = `
             position: fixed; top: 10%; left: 50%; transform: translateX(-50%);
@@ -1334,7 +1356,7 @@ class VideoManager {
         if (this.video.paused) {
             this.video.play().catch(err => {
                 console.error('Play error:', err.message, err.stack);
-                this.showNotification(`Не удалось воспроизвести видео: ${err.message}. Кликните по видео для воспроизведения.`);
+                this.showNotification(`Failed to play video: ${err.message}. Click the video to play.`);
             });
         } else {
             this.video.pause();
@@ -1344,11 +1366,11 @@ class VideoManager {
     handleReaction(type, e) {
         if (e) e.stopPropagation();
         if (!this.state.userId) {
-            this.showNotification('Войдите, чтобы ставить реакции');
+            this.showNotification('Log in to react');
             return;
         }
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, обработка реакции невозможна');
+            console.error('Playlist empty, cannot handle reaction');
             return;
         }
         const videoData = this.state.playlist[this.state.currentIndex].data;
@@ -1425,25 +1447,25 @@ class VideoManager {
     async downloadCurrentVideo(e) {
         e.stopPropagation();
         if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Плейлист пуст, скачивание невозможно');
-            this.showNotification('Нет видео для скачивания!');
+            console.error('Playlist empty, cannot download');
+            this.showNotification('No video to download!');
             return;
         }
         const videoUrl = this.state.playlist[this.state.currentIndex].url;
         if (!videoUrl) {
-            console.error('URL видео отсутствует');
-            this.showNotification('Нет видео для скачивания!');
+            console.error('Video URL missing');
+            this.showNotification('No video to download!');
             return;
         }
 
-        console.log('Попытка скачать видео:', videoUrl);
+        console.log('Attempting to download video:', videoUrl);
         this.uploadBtn.classList.add('downloading');
         this.uploadBtn.style.setProperty('--progress', '0%');
 
         try {
             const response = await this.retryFetch(`${SERVER_URL}/api/download-video?url=${encodeURIComponent(videoUrl)}`, { method: 'GET' });
-            console.log('Статус ответа:', response.status, response.statusText);
-            if (!response.ok) throw new Error(`Ошибка загрузки: ${response.status} ${response.statusText}`);
+            console.log('Response status:', response.status, response.statusText);
+            if (!response.ok) throw new Error(`Download error: ${response.status} ${response.statusText}`);
 
             const total = Number(response.headers.get('content-length')) || 0;
             let loaded = 0;
@@ -1456,13 +1478,13 @@ class VideoManager {
                 chunks.push(value);
                 loaded += value.length;
                 const progress = total ? (loaded / total) * 100 : this.simulateProgress(loaded);
-                console.log('Прогресс:', progress);
+                console.log('Progress:', progress);
                 this.uploadBtn.style.setProperty('--progress', `${progress}%`);
             }
 
             const contentType = response.headers.get('content-type') || 'video/mp4';
             if (!contentType.startsWith('video/')) {
-                throw new Error('Получен неверный тип контента: ' + contentType);
+                throw new Error('Received invalid content type: ' + contentType);
             }
 
             const blob = new Blob(chunks, { type: contentType });
@@ -1475,10 +1497,10 @@ class VideoManager {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
 
-            this.showNotification('Видео успешно скачано!');
+            this.showNotification('Video successfully downloaded!');
         } catch (err) {
-            console.error('Ошибка скачивания:', err.message, err.stack);
-            this.showNotification(`Не удалось скачать видео: ${err.message}${this.tg ? '. Попробуйте снова.' : ''}`);
+            console.error('Download error:', err.message, err.stack);
+            this.showNotification(`Failed to download video: ${err.message}${this.tg ? '. Try again.' : ''}`);
         } finally {
             this.uploadBtn.classList.remove('downloading');
             this.uploadBtn.style.setProperty('--progress', '0%');
@@ -1535,17 +1557,57 @@ class VideoManager {
             this.tg.requestFullscreen()
                 .then(() => {
                     document.body.classList.add('telegram-fullscreen');
-                    this.showNotification('Полноэкранный режим включён');
+                    this.showNotification('Fullscreen mode enabled');
                 })
                 .catch((err) => {
-                    console.error('Ошибка полноэкранного режима Telegram:', err.message, err.stack);
+                    console.error('Telegram fullscreen error:', err.message, err.stack);
                     this.tg.expand();
-                    this.showNotification('Полноэкранный режим недоступен, использовано расширение');
+                    this.showNotification('Fullscreen mode unavailable, using expand');
                 });
-        } else if (!this.tg) {
+        } else {
             if (!document.fullscreenElement) {
                 document.documentElement.requestFullscreen()
-                    .then(() => document.body.classList.add('fullscreen-mode'))
+                    .then(() => {
+                        document.body.classList.add('fullscreen-mode');
+                        this.showNotification('Fullscreen mode enabled');
+                    })
                     .catch(err => {
-                        console.error('Ошибка полноэкранного режима:', err.message, err.stack);
-                        this.showNotification('Полно
+                        console.error('Fullscreen error:', err.message, err.stack);
+                        this.showNotification('Failed to enable fullscreen mode');
+                    });
+            } else {
+                document.exitFullscreen()
+                    .then(() => {
+                        document.body.classList.remove('fullscreen-mode');
+                        this.showNotification('Fullscreen mode disabled');
+                    })
+                    .catch(err => {
+                        console.error('Exit fullscreen error:', err.message, err.stack);
+                        this.showNotification('Failed to exit fullscreen mode');
+                    });
+            }
+        }
+    }
+
+    async generateAIDescription(videoName) {
+        try {
+            const response = await fetch('https://api.x.ai/grok', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    prompt: `Create a short description for a video named "${videoName}" with an affiliate link for a travel service.`
+                })
+            });
+            const result = await response.json();
+            return result.text || 'Check out this amazing video!';
+        } catch (error) {
+            console.error('AI description error:', error.message, error.stack);
+            return 'Check out this amazing video!';
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const videoManager = new VideoManager();
+    videoManager.init();
+});
