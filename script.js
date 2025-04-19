@@ -40,7 +40,7 @@ class VideoManager {
     }
 
     async init() {
-        console.log('Script updated, version 16');
+        console.log('Script updated, version 17');
         if (this.tg?.initDataUnsafe?.user) {
             this.state.userId = String(this.tg.initDataUnsafe.user.id);
             console.log('Telegram initialized, userId:', this.state.userId);
@@ -123,7 +123,6 @@ class VideoManager {
         this.shareTelegram = document.getElementById('shareTelegram');
         this.copyLink = document.getElementById('copyLink');
         this.closeShare = document.getElementById('closeShare');
-        this.affiliateLinkBtn = document.getElementById('affiliateLinkBtn');
         this.videoUpload = document.createElement('input');
         this.videoUpload.type = 'file';
         this.videoUpload.accept = 'video/mp4,video/quicktime,video/webm';
@@ -143,7 +142,6 @@ class VideoManager {
 
         bindButton(this.authBtn, () => this.handleAuth(), '#authBtn');
         bindButton(this.registerChannelBtn, () => this.registerChannel(), '#registerChannelBtn');
-        bindButton(this.affiliateLinkBtn, () => this.handleAffiliateClick(), '#affiliateLinkBtn');
 
         this.reactionButtons.forEach(btn => btn.addEventListener('click', (e) => this.handleReaction(btn.dataset.type, e)));
         bindButton(this.plusBtn, (e) => this.toggleSubmenu(e), '.plus-btn');
@@ -385,9 +383,7 @@ class VideoManager {
                         authorId: video.author_id,
                         lastPosition: video.last_position || 0,
                         chatMessages: video.chat_messages || [],
-                        description: video.description || '',
-                        affiliateLink: video.affiliate_link || '',
-                        affiliateClicks: video.affiliate_clicks || 0
+                        description: video.description || ''
                     }
                 }));
             }
@@ -430,9 +426,7 @@ class VideoManager {
             authorId,
             lastPosition: 0,
             chatMessages: [],
-            description: '',
-            affiliateLink: '',
-            affiliateClicks: 0
+            description: ''
         };
     }
 
@@ -854,20 +848,8 @@ class VideoManager {
         }
         const videoData = this.state.playlist[this.state.currentIndex].data;
         const description = videoData.description || 'No description';
-        const affiliateLink = videoData.affiliateLink || '';
-        descriptionEl.innerHTML = `${this.sanitize(description)}${affiliateLink ? ` <a href="${affiliateLink}" id="affiliateLinkBtn" target="_blank">Check this offer!</a>` : ''}`;
-        descriptionEl.style.display = description !== 'No description' || affiliateLink ? 'block' : 'none';
-    }
-
-    async handleAffiliateClick() {
-        if (!this.state.playlist || this.state.playlist.length === 0) {
-            console.error('Playlist empty, cannot handle affiliate click');
-            return;
-        }
-        const videoData = this.state.playlist[this.state.currentIndex].data;
-        videoData.affiliateClicks = (videoData.affiliateClicks || 0) + 1;
-        await this.updateVideoCache(this.state.currentIndex);
-        console.log('Affiliate link clicked:', videoData.affiliateLink);
+        descriptionEl.innerHTML = this.sanitize(description);
+        descriptionEl.style.display = description !== 'No description' ? 'block' : 'none';
     }
 
     updateChat() {
@@ -1003,15 +985,13 @@ class VideoManager {
 
         const file = this.state.uploadedFile;
         const description = document.getElementById('videoDescription')?.value || '';
-        const affiliateLink = document.getElementById('affiliateLinkInput')?.value || '';
         console.log('Uploading file:', file.name, file.type, file.size);
-        console.log('userId:', this.state.userId, 'Description:', description, 'Affiliate Link:', affiliateLink);
+        console.log('userId:', this.state.userId, 'Description:', description);
 
         const formData = new FormData();
         formData.append('video', file);
         formData.append('userId', this.state.userId);
         formData.append('description', description);
-        formData.append('affiliateLink', affiliateLink);
 
         try {
             const response = await this.retryFetch(`${SERVER_URL}/api/upload-video`, { method: 'POST', body: formData });
@@ -1031,7 +1011,6 @@ class VideoManager {
 
             const newVideoData = this.createEmptyVideoData(this.state.userId);
             newVideoData.description = description;
-            newVideoData.affiliateLink = affiliateLink;
             this.state.playlist.unshift({ url: video.url, data: newVideoData });
             this.state.currentIndex = 0;
             this.loadVideo();
@@ -1085,10 +1064,8 @@ class VideoManager {
         const index = this.state.playlist.findIndex(v => v.url === url);
         if (index === -1) return;
         const newDescription = prompt('Enter new description:', this.state.playlist[index].data.description);
-        const newAffiliateLink = prompt('Enter new affiliate link (optional):', this.state.playlist[index].data.affiliateLink);
         if (newDescription !== null) {
             this.state.playlist[index].data.description = newDescription;
-            this.state.playlist[index].data.affiliateLink = newAffiliateLink || this.state.playlist[index].data.affiliateLink;
             this.updateVideoCache(index);
             const videoItem = document.querySelector(`.video-item [data-url="${url}"]`).parentElement;
             videoItem.querySelector('span').textContent = newDescription || 'No description';
@@ -1154,7 +1131,7 @@ class VideoManager {
         let viewTimeRatio = avgViewTimePerView / duration;
         if (viewTimeRatio > 1) viewTimeRatio = 1 + (videoData.replays / (videoData.views.size || 1));
         const rawScore = (videoData.likes * 5.0) + (videoData.comments.length * 10.0) + (videoData.shares * 15.0) + 
-                        (videoData.viewTime * 0.1) + (videoData.replays * 20.0) + (videoData.affiliateClicks * 10.0) * (1 + viewTimeRatio);
+                        (videoData.viewTime * 0.1) + (videoData.replays * 20.0);
         const maxPossibleScore = 50;
         return Math.max(0, Math.min(5, (rawScore / maxPossibleScore) * 5));
     }
@@ -1255,8 +1232,7 @@ class VideoManager {
             view_time: videoData.viewTime,
             replays: videoData.replays,
             last_position: videoData.lastPosition,
-            chat_messages: trimmedChatMessages,
-            affiliate_clicks: videoData.affiliateClicks
+            chat_messages: trimmedChatMessages
         };
         localStorage.setItem(`videoData_${url}`, JSON.stringify(cacheData));
 
@@ -1586,23 +1562,6 @@ class VideoManager {
                         this.showNotification('Failed to exit fullscreen mode');
                     });
             }
-        }
-    }
-
-    async generateAIDescription(videoName) {
-        try {
-            const response = await fetch('https://api.x.ai/grok', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    prompt: `Create a short description for a video named "${videoName}" with an affiliate link for a travel service.`
-                })
-            });
-            const result = await response.json();
-            return result.text || 'Check out this amazing video!';
-        } catch (error) {
-            console.error('AI description error:', error.message, error.stack);
-            return 'Check out this amazing video!';
         }
     }
 }
